@@ -1,0 +1,64 @@
+/* map + timeline */
+
+body {
+    font-family: "Helvetica Neue", Helvetica, sans-serif;
+}
+
+svg {
+    font-size: 10px;
+}
+
+.vis-title {
+    font: 14px;
+    font-weight: bold;
+    fill: #777;
+}
+#map-container {
+    padding: 15px;
+}
+.map-container {
+    border: 1px solid #ddd;
+    cursor: all-scroll;
+}
+.map {
+    fill: #fefefe;
+    stroke: #000;
+    stroke-width: 0.5px;
+}
+g.label {
+    font-size: 15px;
+    font-weight: bold;
+    text-shadow: 6px 6px 6px #FFF;
+}
+.tooltip {
+    position: absolute;
+    font-size: 12px;
+    width:  auto;
+    height: auto;
+    pointer-events: none;
+    background-color: white;
+}
+
+.circle-hover {
+    stroke: rgb(222,235,247);
+    stroke-width: 1px;
+}
+
+.area {
+    fill: steelblue;
+    fill-opacity: 0.7;
+}
+
+.axis path,
+.axis line {
+    fill: none;
+    stroke: #000;
+    shape-rendering: crispEdges;
+}
+
+.brush .extent {
+    stroke: #fff;
+    fill: #000;
+    fill-opacity: .15;
+    shape-rendering: crispEdges;
+}

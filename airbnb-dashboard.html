@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>Airbnb dashboard</title>
+        <!-- @TODO make these local -->
+        <script src="./js/libs/d3.min.js" charset="utf-8"></script>
+        <script src="./js/libs/topojson.v1.min.js"></script>
+        <script src="./js/libs/crossfilter.min.js"></script>
+        <script src="./js/libs/d3-legend.min.js"></script>
+        <script src="./js/map.js"></script>
+        <link type="txt/css" rel="stylesheet" href="./css/dashboard-styles.css">
+
+    </head>
+    <body>
+        <div id="airbnb-dashboard">
+            <div id="timeline-container"></div>
+            <div id="map-container"></div>
+
+        </div>
+        <script>
+            var map;
+            initVis();
+
+            function initVis() {
+                // Fetch data
+                d3.csv("../../data/listings.csv", function(error, rawData) {
+                    if (error) return console.error(error);
+
+                    // var cf = crossfilter(dataForMap);
+                    // var listings = {
+                    //     crossfilter: cf,
+                    //     dims: {
+                    //         dateCreated: cf.dimension(function(d) { return parseMonthDayYear(d.date_created); }),
+                    //         latitude:    cf.dimension(function(d) { return +d.approx_latitude; }),
+                    //         longitude:   cf.dimension(function(d) { return +d.approx_longitude; }),
+                    //         bedrooms:    cf.dimension(function(d) { return +d.bedrooms; }),
+                    //         bathrooms:   cf.dimension(function(d) { return +d.bathrooms; }),
+                    //         capacity:    cf.dimension(function(d) { return +d.person_capacity; })
+                    //     },
+                    //     groups: {
+
+                    //     }
+                    // }
+
+                    var parseMonthDayYear = d3.time.format("%m/%d/%y").parse;
+
+                    var dataForTimeline     = [],
+                        dateToLatLongToEventCount = {},
+                        dateToEventCount    = {};
+
+                    rawData.forEach(function(d, idx) {
+                        d.date_created = parseMonthDayYear(d.date_created);
+                        d.latitude     = +d.approx_latitude;
+                        d.longitude    = +d.approx_longitude;
+                        // colorScale(d.);
+
+                        if (!dateToEventCount[d.date_created]) {
+                            dateToEventCount[d.date_created] = 0;
+                        }
+                        dateToEventCount[d.date_created]++;
+                    });
+
+                    Object.keys(dateToEventCount).forEach(function(time) {
+                        dataForTimeline.push({
+                            date_created: new Date(time),
+                            ct_new_listings: dateToEventCount[time] });
+                    });
+
+                    dataForTimeline.sort(function(a,b) { return a.date_created - b.date_created; });
+
+                    d3.json("../../data/ca-counties.topo.json", function(error, mapData) {
+                        if (error) return console.error(error);
+                        makeVis(rawData, mapData, dataForTimeline);
+                    });
+
+                });
+            }
+
+            function makeVis(rawData, mapData, dataForTimeline) {
+                map = MapChart("#map-container")
+                    .key(function(d) { return +d.date_created; })
+                    .mapData( topojson.mesh(mapData, mapData.objects.subunits) )
+                    .labels([
+                        { label: "Tahoe City", latitude: 39.1722, longitude: -120.1389 },
+                        { label: "South Lake Tahoe", latitude: 38.94, longitude: -119.9769 },
+                    ]);
+
+                d3.select("#map-container").datum(rawData).call(map);
+
+                makeTimeline(rawData, dataForTimeline);
+            };
+
+            // Creates the event timeline and sets up callbacks for brush changes
+            function makeTimeline(rawData, dataForTimeline) {
+                var margin = { top: 10, right: 10, bottom: 20, left: 25 },
+                    width  = 2*map.width() - margin.left - margin.right,
+                    height = 100 - margin.top  - margin.bottom;
+
+                var timelineSvg = d3.select("#timeline-container").append("svg")
+                    .attr("width", width + margin.left + margin.right)
+                    .attr("height", height + margin.top + margin.bottom);
+
+                var timeline = timelineSvg.append("g")
+                    .attr("class", "timeline")
+                    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+                var x = d3.time.scale()
+                    .domain(d3.extent(dataForTimeline.map(function(d) { return d.date_created; })))
+                    .range([0, width]);
+
+                var y = d3.scale.linear()
+                    .domain(d3.extent(dataForTimeline.map(function(d) { return d.ct_new_listings; })))
+                    .range([height, 0]);
+
+                var xAxis = d3.svg.axis()
+                    .scale(x)
+                    .orient("bottom");
+
+                var yAxis = d3.svg.axis()
+                    .scale(y)
+                    .orient("left")
+                    .ticks(2);
+
+                var area = d3.svg.area()
+                    .interpolate("linear")
+                    .x(function(d) { return x(d.date_created); })
+                    .y0(height)
+                    .y1(function(d) { return y(d.ct_new_listings); });
+
+                timeline.append("path")
+                    .datum(dataForTimeline)
+                    .attr("class", "area")
+                    .attr("d", area);
+
+                timeline.append("g")
+                    .attr("class", "x axis")
+                    .attr("transform", "translate(0," + height + ")")
+                    .call(xAxis);
+
+                timeline.append("g")
+                    .attr("class", "y axis")
+                    .call(yAxis);
+
+                timeline.append("text")
+                    .attr("transform", "rotate(-90)")
+                    .attr("dy", "1em")
+                    .style("text-anchor", "end")
+                    .text("New listings");
+
+                // Add brush to timeline, hook up to callback
+                var brush = d3.svg.brush()
+                    .x(x)
+                    .on("brush", function() { brushCallback(brush, rawData); })
+                    .extent([new Date("12/1/2013"), new Date("1/1/2014")]); // initial value
+
+                timeline.append("g")
+                    .attr("class", "x brush")
+                    .call(brush)
+                  .selectAll("rect")
+                    .attr("y", -6)
+                    .attr("height", height + 7);
+
+                // brush.event(timeline.select('g.x.brush')); // dispatches a single brush event
+            };
+
+            // Called whenever the timeline brush range (extent) is updated
+            // Filters the map data to those points that fall within the selected timeline range
+            function brushCallback(brush, rawData) {
+                if (brush.empty()) {
+                    map.updatePoints([]);
+                } else {
+                    var newDateRange = brush.extent(),
+                        filteredData = [];
+
+                    rawData.forEach(function(d) {
+                        if (d.date_created >= newDateRange[0] && d.date_created <= newDateRange[1]) {
+                            filteredData.push(d);
+                        }
+                    });
+
+                    map.updatePoints(filteredData);
+                    // updateTitleText(newDateRange, filteredData);
+                }
+            }
+        </script>
+    </body>
+</html>

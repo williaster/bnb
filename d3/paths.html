@@ -1,0 +1,838 @@
+
+<script>
+    //Constants
+    var monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+        daysNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+        hoursNames = ['00', '04', '08', '12', '16', '20', '00'];
+
+    var order = {'device' : ['Desktop', 'iPhone', 'Android Phone', 'iPad', 'Android Tablet', 'Other'],
+                 'app_type': ['Native app', 'Mobile version', 'Website', 'Other'],
+                 'device_os': ['iOS',  'Android', 'Windows', 'Mac OS X', 'Linux', 'Other'],
+                 'browser': ['Chrome', 'Firefox', 'Safari', 'IE', 'Other']
+                };
+
+    var timezone = -14; //Assumption
+
+    var color = d3.scale.category10().range(['c01', 'c02', 'c03', 'c03', 'c04', 'c04', 'c04', 'c04']);
+
+    var parseDate = d3.time.format('%Y-%m-%d').parse,
+        parseDateTime = d3.time.format('%Y-%m-%d %H:%M:%S').parse;
+
+    var margin = {top: 30, right: 0, bottom: 465, left: 60},
+        padding = 15,
+        width = 1000 - margin.left - margin.right,
+        height = 940 - margin.top - margin.bottom,
+        widgetWidth = 270,
+        widgetHeight = 70,
+        widgetPadding = 40,
+        barWidth = 170,
+        barPadding = 40,
+        barHeight = 20,
+        lineHeight = padding * 1.2,
+        shift = [10, 5];
+
+    // Helpers
+    d3.selection.prototype.moveToFront = function() {
+        return this.each(function(){
+            this.parentNode.appendChild(this);
+        });
+    };
+
+    Date.prototype.addHours = function(h) {
+        this.setTime(this.getTime() + (h*60*60*1000));
+        return this;
+    }
+
+
+    var validateTime = function(hour, min, max){
+        if (min <= max){
+            return hour >= min && hour <= max
+        } else {
+            return hour >= min || hour <= max
+        }
+    }
+
+    var aggregate = function(data, filter){
+        return _.reduce( _.filter(data, filter),
+            function(memo, d){return {
+                'did_search': memo['did_search'] + d['did_search'],
+                'sent_message': memo['sent_message'] + d['sent_message'],
+                'sent_booking_request': memo['sent_booking_request'] + d['sent_booking_request'],
+                'total_sessions': memo['total_sessions'] + 1
+            } }, {'did_search': 0, 'sent_message': 0, 'sent_booking_request': 0, 'total_sessions': 0})
+    }
+
+
+
+    var getFrequencyByField = function(data, field){
+        var results = [];
+
+        var dataNest = d3.nest()
+            .key(function(d) {return d[field]}).sortKeys(function(a, b){return order[field].indexOf(a) - order[field].indexOf(b)})
+            .entries(data);
+
+        dataNest.forEach(function(d){
+            var result = aggregate(d.values);
+
+            result['field'] = d.key;
+            results.push(result);
+            });
+
+        return results
+    }
+
+    var getFrequencyByHours = function(data){
+        var results = [];
+        for (i = 0; i < 24; i++){
+            var result = aggregate(data, function(d){return validateTime(i, d['ts_min'].getHours(), d['ts_max'].getHours())} );
+
+            result['hour'] = i;
+            results.push(result);
+        }
+
+        var last = _.clone(results[0]);
+        last['hour'] = 24;
+        results.push(last);
+
+        return results
+    }
+
+    var getFrequencyByDay = function(data){
+        var results = [];
+        var range = d3.extent(data, function(d) { return d['ds']; });
+
+        for (i = range[0]; i < range[1] + 86400000 * 7; i = i + 86400000 * 7){
+
+            var result = aggregate(data, function(d){ return d['ds'] >= i && d['ds'] < i + 86400000 * 7} );
+
+            result['day'] = i;
+            results.push(result);
+         }
+
+        if(results[0]['total_sessions'] > 0){
+        var first = {'did_search': 0, 'sent_message': 0, 'sent_booking_request': 0, 'total_sessions': 0, 'day': range[0] - 86400000 * 7}
+            results.unshift(first);
+        }
+
+        if(results[results.length - 1]['total_sessions'] > 0){
+            var last = {'did_search': 0, 'sent_message': 0, 'sent_booking_request': 0, 'total_sessions': 0, 'day': range[1] + 86400000 * 7}
+            results.push(last);
+        }
+
+        return results
+    }
+
+    var getFrequencyByWeekday = function(data){
+        var results = [];
+        for (i = 0; i < 7; i++){
+            var result = aggregate(data, function(d){return validateTime(i, d['ts_min'].getDay(), d['ts_max'].getDay())} );
+
+            result['weekday'] = i;
+            results.push(result);
+        }
+
+        return results
+    }
+
+    var drawBars = function(data, svg){
+
+        var widgetHeight = data.length * barHeight;
+        var widgetWidth = barWidth;
+
+        svg.selectAll(__DATABITCONTAINER + ' *:not(.header)').remove();
+
+        var x = d3.scale.linear()
+            .range([0, widgetWidth]);
+
+        var y = d3.scale.ordinal()
+            .rangeRoundBands([0, widgetHeight], 0);
+
+        var color = d3.scale.category10().range(['c02', 'c03', 'c04', 'c01']);
+
+        var xAxis = d3.svg.axis()
+            .scale(x)
+            .ticks(3)
+            .tickSize(widgetHeight + 2 * padding, 0.1)
+            .tickFormat(d3.format('d'))
+            .orient('bottom');
+
+        var yAxis = d3.svg.axis()
+            .scale(y)
+            .orient('right');
+
+        x.domain([0, d3.max(data, function(d) { return d['total_sessions']; })]);
+        y.domain(data.map(function(d) { return d['field']; }));
+
+        color.domain(d3.keys(data[0]).filter(function(key) { return key !== 'field'}));
+
+        var categories = color.domain().map(function(name) {
+            return {
+              name: name,
+              values: data.map(function(d) {
+                return {field: d.field, x: x(d[name]), y: y(d['field'])};
+              })
+            };
+          });
+
+        var category = svg.selectAll(__DATABITCONTAINER + ' .bar')
+            .data(categories)
+        .enter().append('g')
+            .attr('class', function(d) { return 'category ' + color(d.name); });
+
+        category.selectAll(__DATABITCONTAINER + ' rect.bar')
+            .data(function(d) { return d.values; })
+        .enter().append('rect')
+            .attr('class', 'bar')
+            .attr('height', y.rangeBand() - 1)
+            .attr('x', 0)
+            .attr('width', function(d) { return d.x})
+            .attr('y', function(d) { return d.y});
+
+        category.selectAll(__DATABITCONTAINER + ' rect.tick')
+            .data(function(d) { return d.values; })
+        .enter().append('rect')
+            .attr('class', 'tick')
+            .attr('height', y.rangeBand() - 1)
+            .attr('x', function(d) { return d.x})
+            .attr('width', 2)
+            .attr('y', function(d) { return d.y});
+
+        svg.append('g')
+            .attr('class', 'x axis bars')
+            .attr('transform', 'translate(0, ' + (-padding) + ')')
+            .call(xAxis);
+
+        svg.append('g')
+            .attr('class', 'y axis bars')
+            .attr('transform', 'translate(' + (barWidth - padding) + ', 0)')
+            .call(yAxis)
+        .selectAll(__DATABITCONTAINER + ' text')
+            .style('text-anchor', 'end');
+    };
+
+    var drawDaytime = function(data, svg){
+        svg.selectAll(__DATABITCONTAINER + ' *').remove();
+
+        var x = d3.scale.linear()
+            .range([0, widgetWidth]);
+
+        var y = d3.scale.linear()
+            .range([widgetHeight, 0]);
+
+        var color = d3.scale.category10().range(['c02', 'c03', 'c04', 'c01']);
+
+        var xAxis = d3.svg.axis()
+            .scale(x)
+            .orient('bottom')
+            .tickValues([0, 4, 8, 12, 16, 20, 24])
+            .tickFormat(function(d, i){
+                return hoursNames[i]
+            });
+
+        var yAxis = d3.svg.axis()
+            .scale(y)
+            .orient('left')
+            .tickFormat(d3.format('d'))
+            .tickSize(widgetWidth, 0.1)
+            .ticks(4);
+
+        var area = d3.svg.area()
+            .x(function(d) { return x(d.hour); })
+            .y0(widgetHeight)
+            .y1(function(d) { return y(d.y); })
+            .interpolate('monotone');
+
+        var line = d3.svg.line()
+            .x(function(d) { return x(d.hour); })
+            .y(function(d) { return y(d.y); })
+            .interpolate('monotone');
+
+        x.domain(d3.extent(data, function(d) { return d.hour; }));
+        y.domain([0, d3.max(data, function(d) { return d.total_sessions})]);
+
+        color.domain(d3.keys(data[0]).filter(function(key) { return key !== 'hour'}));
+
+         var categories = color.domain().map(function(name) {
+            return {
+              name: name,
+              values: data.map(function(d) {
+                return {hour: d.hour, y: d[name]};
+              })
+            };
+          });
+
+        var category = svg.selectAll(__DATABITCONTAINER + ' .category')
+            .data(categories)
+        .enter().append('g')
+            .attr('class', 'category');
+
+        category.append('path')
+            .attr('d', function(d) { return area(d.values); })
+            .attr('class', function(d) { return 'area ' + color(d.name); });
+
+        category.append('path')
+            .attr('d', function(d) { return line(d.values); })
+            .attr('class', function(d) { return 'stroke ' + color(d.name); });
+
+        svg.append('g')
+            .attr('class', 'x axis lines')
+            .attr('transform', 'translate(0,' + (widgetHeight + padding)+ ')')
+            .call(xAxis);
+
+        svg.append('g')
+            .attr('class', 'y axis lines')
+            .attr('transform', 'translate(' + widgetWidth + ', 0)')
+            .call(yAxis)
+        .selectAll(__DATABITCONTAINER + ' .tick text')
+            .attr('dx', -4);
+
+        svg.append('text')
+            .text('☾')
+            .attr('class', 'sign')
+            .attr('x', -5)
+            .attr('y', widgetHeight + 50);
+
+        svg.append('text')
+            .text('☾')
+            .attr('class', 'sign')
+            .attr('x', widgetWidth - 5)
+            .attr('y', widgetHeight + 50);
+
+        svg.append('text')
+            .text('☼')
+            .attr('class', 'sign')
+            .attr('x', widgetWidth/2 - 5)
+            .attr('y', widgetHeight + 52);
+
+        svg.append('text')
+            .text('The time of day distribution')
+            .attr('class', 'header')
+            .attr('x', 0)
+            .attr('y', -5);
+    };
+
+    var drawWeekday = function(data, svg){
+        svg.selectAll(__DATABITCONTAINER + ' *').remove();
+
+        var x = d3.scale.linear()
+            .range([0, widgetWidth]);
+
+        var y = d3.scale.linear()
+            .range([widgetHeight, 0]);
+
+        var color = d3.scale.category10().range(['c02', 'c03', 'c04', 'c01']);
+
+        var xAxis = d3.svg.axis()
+            .scale(x)
+            .orient('bottom')
+            .tickValues([0, 1, 2, 3, 4, 5, 6])
+            .tickFormat(function(d, i){
+                return daysNames[i]
+            });
+
+        var yAxis = d3.svg.axis()
+            .scale(y)
+            .orient('left')
+            .tickFormat(d3.format('d'))
+            .tickSize(widgetWidth, 0.1)
+            .ticks(4);
+
+        var area = d3.svg.area()
+            .x(function(d) { return x(d.weekday); })
+            .y0(widgetHeight)
+            .y1(function(d) { return y(d.y); })
+            .interpolate('monotone');
+
+        var line = d3.svg.line()
+            .x(function(d) { return x(d.weekday); })
+            .y(function(d) { return y(d.y); })
+            .interpolate('monotone');
+
+        x.domain(d3.extent(data, function(d) { return d.weekday; }));
+        y.domain([0, d3.max(data, function(d) { return d.total_sessions })]);
+
+        color.domain(d3.keys(data[0]).filter(function(key) { return key !== 'weekday'}));
+
+         var categories = color.domain().map(function(name) {
+            return {
+              name: name,
+              values: data.map(function(d) {
+                return {weekday: d.weekday, y: d[name]};
+              })
+            };
+          });
+
+        var category = svg.selectAll(__DATABITCONTAINER + ' .category')
+            .data(categories)
+        .enter().append('g')
+            .attr('class', 'category');
+
+        category.append('path')
+            .attr('d', function(d) { return area(d.values); })
+            .attr('class', function(d) { return 'area ' + color(d.name); });
+
+        category.append('path')
+            .attr('d', function(d) { return line(d.values); })
+            .attr('class', function(d) { return 'stroke ' + color(d.name); });
+
+
+        svg.append('g')
+            .attr('class', 'x axis lines')
+            .attr('transform', 'translate(0,' + (widgetHeight + padding)+ ')')
+            .call(xAxis);
+
+        svg.append('g')
+            .attr('class', 'y axis lines')
+            .attr('transform', 'translate(' + widgetWidth + ', 0)')
+            .call(yAxis)
+        .selectAll(__DATABITCONTAINER + ' .tick text')
+            .attr('dx', -4);
+
+        svg.append('text')
+            .text('Weekday distribution')
+            .attr('class', 'header')
+            .attr('x', 0)
+            .attr('y', -5);
+    };
+
+    var drawDayByDay = function(data, svg, x){
+
+            svg.selectAll(__DATABITCONTAINER + ' *').remove();
+
+            var y = d3.scale.linear()
+                .range([widgetHeight, 0]);
+
+            var color = d3.scale.category10().range(['c02', 'c03', 'c04', 'c01']);
+
+            var yAxis = d3.svg.axis()
+                .scale(y)
+                .orient('left')
+                .tickFormat(d3.format('d'))
+                .tickSize(width, 0.1)
+                .ticks(4);
+
+            var area = d3.svg.area()
+                .x(function(d) { return x(d.day); })
+                .y0(widgetHeight)
+                .y1(function(d) { return y(d.y); })
+                .interpolate('monotone');
+
+            var line = d3.svg.line()
+                .x(function(d) { return x(d.day); })
+                .y(function(d) { return y(d.y); })
+                .interpolate('monotone');
+
+            y.domain([0, d3.max(data, function(d) { return d.total_sessions})]);
+
+
+            color.domain(d3.keys(data[0]).filter(function(key) { return key !== 'day'}));
+
+             var categories = color.domain().map(function(name) {
+                return {
+                  name: name,
+                  values: data.map(function(d) {
+                    return {day: d.day, y: d[name]};
+                  })
+                };
+              });
+
+            var category = svg.selectAll(__DATABITCONTAINER + ' .category')
+                .data(categories)
+            .enter().append('g')
+                .attr('class', 'category');
+
+            category.append('path')
+                .attr('d', function(d) { return area(d.values); })
+                .attr('class', function(d) { return 'area ' + color(d.name); });
+
+            category.append('path')
+                .attr('d', function(d) { return line(d.values); })
+                .attr('class', function(d) { return 'stroke ' + color(d.name); });
+
+            svg.append('g')
+                .attr('class', 'y axis lines')
+                .attr('transform', 'translate(' + width + ', 0)')
+                .call(yAxis)
+            .selectAll(__DATABITCONTAINER + ' .tick text')
+                .attr('dx', -4);
+
+            svg.append('text')
+                .text('Sessions/week')
+                .attr('class', 'header')
+                .attr('x', 0)
+                .attr('y', -5);
+    };
+
+
+
+    var x = d3.time.scale()
+        .range([0, width]);
+
+    var y = d3.scale.log()
+        .clamp(true)
+        .range([height, 0]);
+
+    var size = d3.scale.log()
+        .range([2, 16]);
+
+    var xAxis = d3.svg.axis().scale(x)
+        .orient('bottom')
+        .tickPadding(0)
+        .tickSize(10, 0)
+        .ticks(d3.time.months, 1)
+        .tickFormat(function(d){
+            return monthNames[d.getMonth()] + (d.getMonth() ? '' :  ' ' + d.getFullYear())
+        });
+
+    var yAxis = d3.svg.axis().scale(y)
+        .orient('left')
+        .tickPadding(4)
+        .tickSize(6, 0.1)
+        .ticks(0, '0f');
+
+    var sessionsLine = d3.svg.line()
+        .x(function(d) { return x(d['ds']); })
+        .y(function(d) { return y(d['aggr_duration']); })
+        .interpolate('step-after');
+
+    var svg = d3.select(__DATABITCONTAINER + ' .chart')
+        .append('svg')
+            .attr('width', width + margin.left + margin.right)
+            .attr('height', height + margin.top + margin.bottom)
+        .append('g')
+            .attr('transform',
+                  'translate(' + margin.left + ',' + margin.top + ')');
+
+    // Widgets
+    var aggregation = svg
+        .append('g')
+        .attr('class', 'tooltip')
+        .attr('transform', 'translate(0,' + (margin.top + height + 2 * padding) + ')');
+
+    var daytime = svg
+        .append('g')
+        .attr('class', 'daytime')
+        .attr('transform', 'translate(0,' + (margin.top + height + widgetHeight + 5 * padding) + ')');
+
+    var weekday = svg
+        .append('g')
+        .attr('class', 'weekday')
+        .attr('transform', 'translate(0,' + (margin.top + height + 2 * widgetHeight + 11 * padding) + ')');
+
+    var device = svg
+        .append('g')
+        .attr('class', 'device')
+        .attr('transform', 'translate(' + (widgetWidth + 4 * padding) + ',' + (margin.top + height + widgetHeight + 6 * padding) + ')');
+
+    var device_os = svg
+        .append('g')
+        .attr('class', 'device_os')
+        .attr('transform', 'translate(' + (widgetWidth + 4 * padding + barWidth + 3 * padding) + ',' + (margin.top + height + widgetHeight + 6 * padding) + ')');
+
+    var app_type = svg
+        .append('g')
+        .attr('class', 'app_type')
+        .attr('transform', 'translate(' + (widgetWidth + 4 * padding + 2 * (barWidth + 3 * padding)) + ',' + (margin.top + height + widgetHeight + 6 * padding) + ')');
+
+    var stats = svg
+        .append('text')
+        .attr('class', 'stats')
+        .attr('transform', 'translate(' + width + ',' + (lineHeight + shift[1]) + ')')
+        .style('text-anchor', 'end');
+    var animatedBar = svg
+        .append('g')
+        .attr('class', 'animated_bar');
+
+    var dsv = d3.dsv('|', 'text/plain');
+    dsv('/bits/airbnb-user-pathways/files/airbnb_session_data.csv', function(error, data) {
+
+        // Data processing
+        data = _.sortBy(data, function(d){return +d['dim_session_number']});
+        data = _.sortBy(data, 'id_visitor');
+
+        data.forEach(function(d, i, arr){
+            d['dim_session_number'] = +d['dim_session_number'];
+            d['next_dim_session_number'] = +d['next_dim_session_number'];
+
+            //Fix timezone according daytime activity distribution
+
+            d['ts_min'] = (parseDateTime(d['ts_min'])).addHours(timezone);
+            d['ts_max'] = (parseDateTime(d['ts_max'])).addHours(timezone);
+            d['ds'] = new Date(d['ts_min'].getTime()).setHours(0, 0, 0, 0);
+
+            d['duration'] = (d['ts_max'] - d['ts_min']) / 1000 / 3600;
+            d['activity'] = d['sent_booking_request'] + d['sent_message'] + d['did_search'];
+
+            d['did_search'] = +d['did_search'];
+            d['sent_message'] = +d['sent_message'];
+            d['sent_booking_request'] = +d['sent_booking_request'];
+
+            d['device'] = d['dim_device_app_combo'].split(' - ')[0];
+            d['app'] = d['dim_device_app_combo'].split(' - ')[1];
+
+            if (d['device'] === 'Unknown' || d['device'] === 'Other') {
+                d['device'] = 'Other';
+                d['device_type'] = 'Other';
+                d['device_os'] = 'Other';
+            }
+
+            if (d['device'] === 'iPad' || d['device'] === 'Android Tablet') {d['device_type'] = 'Tablet'}
+            if (d['device'] === 'iPhone' || d['device'] === 'Android Phone') {d['device_type'] = 'Phone'}
+            if (d['device'] === 'Desktop') {d['device_type'] = 'Desktop'}
+
+            if (d['device'] === 'iPad' || d['device'] === 'iPhone') {d['device_os'] = 'iOS'}
+            if (d['device'] === 'Android Tablet' || d['device'] === 'Android Phone') {d['device_os'] = 'Android'}
+            if (d['device'] === 'Desktop' && d['dim_user_agent'].indexOf('Macintosh') > -1) {d['device_os'] = 'Mac OS X'}
+            if (d['device'] === 'Desktop' && d['dim_user_agent'].indexOf('Windows') > -1) {d['device_os'] = 'Windows'}
+            if (d['device'] === 'Desktop' && d['dim_user_agent'].indexOf('Linux') > -1) {d['device_os'] = 'Linux'}
+
+            if (d['app'] === 'iOS' || d['app'] === 'Android') {d['app_type'] = 'Native app'; d['browser'] = 'Other'}
+            if (d['app'] === 'Moweb') {d['app_type'] = 'Mobile version'; d['browser'] = 'Other'}
+            if (d['app'] === 'Web'){d['app_type'] = 'Website'; d['browser'] = 'Other'}
+            if (d['app'] === 'Chrome' || d['app'] === 'Safari' || d['app'] === 'IE'  || d['app'] === 'Firefox') {
+                d['app_type'] = 'Website';
+                d['browser'] = d['app'];
+            }
+            if (d['app'] === 'Other'){d['app_type'] = 'Other'; d['browser'] = 'Other'}
+
+            //Calculate aggregated duration
+            if(i !== 0) {
+                var prev = arr[i-1];
+            } else {
+                var prev = {'id_visitor': 'start'};
+            }
+
+            if (d['id_visitor'] === prev['id_visitor']) {
+                d['aggr_duration'] = prev['aggr_duration'] + d['duration']
+            } else {
+                d['aggr_duration'] = d['duration'];
+            }
+        });
+
+        x.domain(d3.extent(data, function(d) { return d['ds']; }));
+        y.domain([0.1, d3.max(data, function(d) { return d['aggr_duration']; })]);
+
+        svg.append('g')
+            .attr('class', 'x axis')
+            .attr('transform', 'translate(0,' + (height + padding)  + ')')
+            .call(xAxis)
+        .selectAll(__DATABITCONTAINER + ' .tick text')
+            .style('text-anchor', 'start')
+            .attr('x', 6)
+            .attr('y', 6);
+
+        svg.append('g')
+            .attr('class', 'y axis')
+            .attr('transform', 'translate(-' + padding + ', 0)')
+            .call(yAxis)
+
+        drawDaytime(getFrequencyByHours(data), daytime);
+        drawWeekday(getFrequencyByWeekday(data), weekday);
+        drawDayByDay(getFrequencyByDay(data), aggregation, x);
+        drawBars(getFrequencyByField(data, 'app_type'), app_type);
+        drawBars(getFrequencyByField(data, 'device_os'), device_os);
+        drawBars(getFrequencyByField(data, 'device'), device);
+
+        app_type.append('text')
+            .text('Application')
+            .attr('class', 'header')
+            .attr('x', 0)
+            .attr('y', -5  - padding);
+
+        device_os.append('text')
+            .text('OS')
+            .attr('class', 'header')
+            .attr('x', 0)
+            .attr('y', - 5 - padding);
+
+        device.append('text')
+            .text('Device')
+            .attr('class', 'header')
+            .attr('x', 0)
+            .attr('y', - 5 - padding);
+
+        //Remove loader
+        d3.selectAll(__DATABITCONTAINER + ' .loader').remove();
+
+        // Draw pathways
+        var dataNest = d3.nest()
+            .key(function(d) {return d['id_visitor'];})
+            .entries(data);
+
+        dataNest.forEach(function(d) {
+
+            //Create fake first dot
+            var emptyDot = _.clone(d.values[0]);
+            emptyDot['aggr_duration'] = 0;
+
+            d.values.unshift(emptyDot);
+
+            // Draw lines
+            var g = svg.append('g').attr('class', 'visitor');
+            g.append('path')
+                .attr('class', 'line')
+                .attr('stroke-linejoin', 'round')
+                .attr('d', sessionsLine(d.values));
+
+            d.values.shift();
+
+            // Move more important dots to top layer
+            d.sorted = _.sortBy(d.values, 'activity');
+
+            // Draw dots
+            g.selectAll(__DATABITCONTAINER + ' .dot')
+                .data(d.sorted)
+                .enter().append('circle')
+                .attr('r', 1)
+                .attr('cx', function(d) { return x(d['ds']); })
+                .attr('cy', function(d) { return y(d['aggr_duration']) })
+                .attr('class', function(d) { return 'dot ' + color(d['activity']) })
+                .on('mouseover',function(d){
+                });
+
+            // Move active to front
+            g.on('mouseover',function(){
+                var sel = d3.select(this);
+                sel.moveToFront();
+
+                g.attr('class', 'visitor selected');
+
+                stats.selectAll(__DATABITCONTAINER + ' tspan').remove();
+
+                stats
+                    .append('tspan')
+                    .style('font-weight', 'bold')
+                    .text(d.values.length)
+                stats
+                    .append('tspan')
+                    .text(' sessions of user #')
+                stats
+                    .append('tspan')
+                    .style('font-weight', 'bold')
+                    .text(d.key)
+
+                drawDaytime(getFrequencyByHours(d.values), daytime);
+                drawWeekday(getFrequencyByWeekday(d.values), weekday);
+                drawDayByDay(getFrequencyByDay(d.values), aggregation, x);
+                drawBars(getFrequencyByField(d.values, 'app_type'), app_type);
+                drawBars(getFrequencyByField(d.values, 'device_os'), device_os);
+                drawBars(getFrequencyByField(d.values, 'device'), device);
+            });
+
+            g.on('mouseout',function(){
+
+                g.attr('class', 'visitor');
+
+                stats.selectAll(__DATABITCONTAINER + ' tspan').remove();
+                stats
+                    .append('tspan')
+                    .style('font-weight', 'bold')
+                    .text(data.length)
+                stats
+                    .append('tspan')
+                    .text(' sessions of ')
+                stats
+                    .append('tspan')
+                    .style('font-weight', 'bold')
+                    .text(dataNest.length)
+                stats
+                    .append('tspan')
+                    .text(' users');
+
+                drawDaytime(getFrequencyByHours(data), daytime);
+                drawWeekday(getFrequencyByWeekday(data), weekday);
+                drawDayByDay(getFrequencyByDay(data), aggregation, x);
+                drawBars(getFrequencyByField(data, 'app_type'), app_type);
+                drawBars(getFrequencyByField(data, 'device_os'), device_os);
+                drawBars(getFrequencyByField(data, 'device'), device);
+            });
+
+        });
+
+        stats
+            .append('tspan')
+            .style('font-weight', 'bold')
+            .text(data.length)
+        stats
+            .append('tspan')
+            .text(' sessions of ')
+        stats
+            .append('tspan')
+            .style('font-weight', 'bold')
+            .text(dataNest.length)
+        stats
+            .append('tspan')
+            .text(' users');
+
+        //Draw legend
+        var legend = svg.append('g')
+            .attr('class', 'legend')
+            .attr('transform', 'translate(' + (padding) + ',' + (lineHeight)  + ')');
+
+        var item = legend.append('g')
+            .attr('transform', 'translate(0, 0)')
+
+        item.append('path')
+            .attr('d', 'M0,0 L0,5.5 L-1,5.5 L-1,0 L-4,0 L-0.5,-3.5 L3,0 L0,0 Z')
+
+        item.append('text')
+            .text('Hours online')
+            .attr('x', shift[0])
+            .attr('y', shift[1])
+
+        var item = legend.append('g')
+            .attr('transform', 'translate(0,' + (padding + lineHeight) + ')')
+
+        item.append('circle')
+            .attr('class', 'c04')
+            .attr('r', 2.5)
+            .attr('cx', 0)
+            .attr('cy', 0)
+
+        item.append('text')
+            .text('Sent booking request')
+            .attr('x', shift[0])
+            .attr('y', shift[1])
+
+        var item = legend.append('g')
+            .attr('transform', 'translate(0, ' + (padding + 2 * lineHeight) + ')')
+
+        item.append('circle')
+            .attr('class', 'c03')
+            .attr('r', 2.5)
+            .attr('cx', 0)
+            .attr('cy', 0)
+
+        item.append('text')
+            .text('Sent message')
+            .attr('x', shift[0])
+            .attr('y', shift[1])
+
+        var item = legend.append('g')
+            .attr('transform', 'translate(0, ' + (padding + 3 * lineHeight) + ')')
+
+        item.append('circle')
+            .attr('class', 'c02')
+            .attr('r', 2.5)
+            .attr('cx', 0)
+            .attr('cy', 0)
+
+        item.append('text')
+            .text('Searched')
+            .attr('x', shift[0])
+            .attr('y', shift[1])
+
+        var item = legend.append('g')
+            .attr('transform', 'translate(0, ' + (padding + 4 * lineHeight) + ')')
+
+        item.append('path')
+            .attr('class', 'c01')
+            .attr('d', 'M-2.5,4 L-2.5,-2.5 L4,-2.5')
+
+        item.append('text')
+            .text('Just visited')
+            .attr('x', shift[0])
+            .attr('y', shift[1])
+
+    });
+</script>
