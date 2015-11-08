@@ -8,110 +8,75 @@ var MapChart = function(containerId) {
     var colorAccessor;
     var radiusAccessor;
     var dataKeyAccessor  = function(d, i) { return i; }; // uniquely ids data
-    var latitudeAccessor = function(d) { return +d.latitude; };
-    var longitudeAccessor= function(d) { return +d.longitude; };
+    var locationAccessor = function(d) { return d.value; }
     var userAddedLabels  = [];
     var constantRadius   = false;
     var showLegend       = false;
-    var mapScale         = 45000;
-    var mapCenter        = [-119.9769, 38.94]; // tahoe
+    var mapScale         = 220000;
+    var mapCenter        = [-120.1, 39.14]; // tahoe
 
     // Color related
-    var labelCircleRadius  = 2;
-    var labelCircleColor   = "#000"
-    var defaultCircleColor = "red";
+    var defaultCircleColor = "#d01c8b";
     var circleOpacity      = 0.4;
     var colorScale = d3.scale.linear()
-        .range(["#ef8a62","67a9cf"]);
+        .range(["#d01c8b","#4dac26"]);
 
     // Size related
-    var defaultRadius = 3;
+    var defaultRadius = 4;
     var radiusScale = d3.scale.sqrt()
         .range([2, 15]);
 
-    // Map projection
-    var projection = d3.geo.mercator();
-    var pathGenerator = d3.geo.path()
-        .projection(projection);
+    // Map tiles
+    var tile = d3.geo.tile();
+    var tileProjection = d3.geo.mercator();
+    var tilePath = d3.geo.path()
+        .projection(tileProjection);
+
+    // Data projection
+    var dataProjection = d3.geo.mercator();
 
     // Map zoom
     var zoom = d3.behavior.zoom()
-        .on("zoom", function() {
-            var translate = d3.event.translate.join(",");
-            var scale = d3.event.scale;
-            mapG.attr("transform", "translate(" + translate + ")scale(" + scale + ")");
+        .on("zoom", onZoom);
 
-            // @todo scale labels
-
-            if (constantRadius) {
-                 mapG.selectAll("circle.data")
-                    .attr("r", function(d) {
-                        var unscaled = radiusAccessor ? radiusScale(radiusAccessor(d)) : defaultRadius;
-                        return unscaled / zoom.scale();
-                    });
-            }
-        });
-
-    var mapG, labelsG, dataG;
+    var mapSvg, dataG, tilesG;
 
     var map = function(selection) {
         selection.each(function(data, index) {
-            if (!mapData) return;
+            console.log("MapChart called with data", data);
+            tile.size([width, height]);
 
-            projection.scale(mapScale).center(mapCenter);
+            // Data projection
+            dataProjection
+                .scale((mapScale) / 2 / Math.PI)
+                .translate([-width / 2, -height / 2]);
 
-            var mapSvg = d3.select(containerId).append("svg")
-                .attr("class", "map-container")
-                .attr("width", width)
-                .attr("height", height);
+            // Map zoom
+            zoom.scale(dataProjection.scale() * 2 * Math.PI)
+                .scaleExtent([1 << 10, 1 << 20])
+                .translate(dataProjection(mapCenter).map(function(x) { return -x; }))
 
-            mapG = mapSvg.append("g");
-            dataG = mapG.append("g");
-
-            mapG.append("path")
-              .datum(mapData)
+            mapSvg = d3.select(containerId).append("svg")
                 .attr("class", "map")
-                .attr("d", pathGenerator);
+                .attr("width", width)
+                .attr("height", height)
+                .call(zoom); // make zoomable
 
-            mapSvg.call(zoom); // make zoomable
+            tilesG = mapSvg.append("g")
+                .attr("class", "tile-layer");
 
-            // Labels
-            if (userAddedLabels.length) {
-                labelsG = mapG.append("g");
+            dataG  = mapSvg.append("g")
+                .attr("class", "data-layer");
 
-                var labels = labelsG.selectAll("g.label")
-                    .data(userAddedLabels)
-                  .enter().append("g")
-                    .attr("class", "label")
-                    .attr("transform", function(d) {
-                        return "translate(" + projection([+d.longitude, +d.latitude])[0] + "," + projection([+d.longitude, +d.latitude])[1] + ")";
-                    })
-                    // .attr("cx", function(d) {
-                    //     return projection([+d.longitude, +d.latitude])[0];
-                    // })
-                    // .attr("cy", function(d) {
-                    //     return projection([+d.longitude, +d.latitude])[1];
-                    // });;
-
-                labels.append("circle")
-                    .attr("fill", labelCircleColor)
-                    .attr("r", labelCircleRadius);
-
-                labels.append("text")
-                    .text(function(d) { return d.label; })
-                    .attr("dx", 7)
-                    .attr("dy", 2)
-                    .attr("text-anchor", "left");
-
-            }
+            onZoom(); // @todo how to pass data?
             map.updateChart(data);
         });
     };
 
     map.updateChart = function(nextData) {
         // update domains if accessors passed  @TODO legend
-        if (radiusAccessor) radiusScale.domain(d3.extent(radiusAccessor));
-        if (colorAccessor)  colorScale.domain(d3.extent(colorAccessor));
+        if (radiusAccessor) radiusScale.domain(d3.extent(nextData, radiusAccessor));
+        if (colorAccessor)  colorScale.domain(d3.extent(nextData, colorAccessor));
 
         var dataCircles = dataG.selectAll("circle.data")
             .data(nextData, dataKeyAccessor);
@@ -133,10 +98,10 @@ var MapChart = function(containerId) {
             .attr("opacity", circleOpacity)
             .attr("r",  0)
             .attr("cx", function(d) {
-                return projection([+d.longitude, +d.latitude])[0];
+                return dataProjection(locationAccessor(d))[0];
             })
             .attr("cy", function(d) {
-                return projection([+d.longitude, +d.latitude])[1];
+                return dataProjection(locationAccessor(d))[1];
             })
           .transition()
             .duration(500)
@@ -151,12 +116,44 @@ var MapChart = function(containerId) {
             .attr("r", 0).remove();
     };
 
-    // Getter / setters depending on args, for caller to customize
-    map.mapData = function(_) {
-        if (typeof _ === "undefined") return mapData;
-        mapData = _;
-        return map;
+    function onZoom() {
+        var tileData = tile
+            .scale(zoom.scale())
+            .translate(zoom.translate())
+            ();
+
+        dataProjection
+            .scale(zoom.scale() / 2 / Math.PI)
+            .translate(zoom.translate());
+
+        dataG.selectAll("circle.data")
+            .attr("cx", function(d) {
+                return dataProjection(locationAccessor(d))[0];
+            })
+            .attr("cy", function(d) {
+                return dataProjection(locationAccessor(d))[1];
+            })
+
+        var image = tilesG
+            .attr("transform", "scale(" + tileData.scale + ")translate(" + tileData.translate + ")")
+          .selectAll("image")
+            .data(tileData, function(d) { return d; });
+
+        image.exit()
+            .remove();
+
+        image.enter().append("image")
+            .attr("xlink:href", function(d) {
+                return "http://" + ["a", "b", "c"][Math.random() * 3 | 0] +
+                       ".tile.stamen.com/toner/" + d[2] + "/" + d[0] + "/" + d[1] + ".png";
+            })
+            .attr("width", 1)
+            .attr("height", 1)
+            .attr("x", function(d) { return d[0]; })
+            .attr("y", function(d) { return d[1]; });
     };
+
+    // Getter / setters depending on args, for caller to customize
     map.key = function(_) {
         if (typeof _ === "undefined") return dataKeyAccessor;
         dataKeyAccessor = _;
@@ -166,6 +163,11 @@ var MapChart = function(containerId) {
     map.width = function(_) {
         if (typeof _ === "undefined") return width;
         width = _;
+        return map;
+    };
+    map.height = function(_) {
+        if (typeof _ === "undefined") return height;
+        height = _;
         return map;
     };
     map.scale = function(_) {
@@ -178,13 +180,18 @@ var MapChart = function(containerId) {
         center = _;
         return map;
     };
-    map.labels = function(_) {
-        userAddedLabels = _;
-        return map;
-        // [ { label: string, long: number, lat: number } ]
-    };
     map.updatePoints = function(nextData) {
         this.updateChart(nextData);
+    };
+    map.location = function(_) {
+        if (typeof _ === "undefined") return locationAccessor;
+        locationAccessor = _;
+        return map;
+    };
+    map.radius = function(_) {
+        if (typeof _ === "undefined") return radiusAccessor;
+        radiusAccessor = _;
+        return map;
     };
 
     return map;
