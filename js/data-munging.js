@@ -2,6 +2,8 @@
 var mungeData = function(data) {
     var monthDayYear = d3.time.format("%m/%d/%y").parse;
 
+    data.sort(function(a,b) { return monthDayYear(b.date_created) - monthDayYear(a.date_created); })
+
     var listings = {};
     var cf   = listings.crossfilter = crossfilter(data);
     var dims = listings.dims = {
@@ -14,12 +16,18 @@ var mungeData = function(data) {
     };
 
     var groups = listings.groups = {
-
+        dateCreated: dims.dateCreated.group(),
+        location:    dims.location.group(),
+        capacity:    dims.capacity.group(),
     };
 
     listings.metrics = {
-        newListingsPerDay: dims.dateCreated.group().reduceCount(),
-        newListingsPerLocation: dims.location.group().reduceCount()
+        newListingsPerDay: function() {
+            return groups.dateCreated.reduceCount();
+        },
+        newListingsPerLocation: function() {
+            return groups.location.reduceCount();
+        }
     };
 
     return listings;

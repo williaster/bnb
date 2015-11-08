@@ -9,6 +9,7 @@
         <script src="./js/libs/crossfilter.min.js"></script>
         <script src="./js/libs/d3-legend.min.js"></script>
         <script src="./js/libs/d3.geo.tile.js"></script>
+        <script src="./js/libs/dc.min.js"></script>
 
         <!-- Project files -->
         <script src="./js/map.js"></script>
@@ -18,75 +19,80 @@
     </head>
     <body>
         <div id="airbnb-dashboard">
-            <div class="chart-label">AIRBNB Tahoe Marketplace</div>
-            <div id="timeline-container"></div>
-            <div id="map-container">
-                <div class="chart-label">Listings by location</div>
+            <div class="chart-label">Airbnb Tahoe Market</div>
+            <div id="loading"></div>
+            <div id="timeline-container">
+                <div class="chart-label">New Listings</div>
             </div>
-
+            <div>
+                <div id="map-container" class="ib">
+                    <div class="chart-label">By location</div>
+                </div>
+                <div id="people-capacity" class="ib">
+                    <div class="chart-label">People capacity</div>
+                </div>
+            </div>
         </div>
         <script>
-            var map;
+            var overrideTimeDomain = [new Date("1/1/2013"), new Date("1/1/2015")];
+            var map, byCapacity;
             initVis();
 
             function initVis() {
                 // Fetch data
                 d3.csv("../../data/listings.csv", function(error, rawData) {
                     if (error) return console.error(error);
-
                     var listings = mungeData(rawData);
-
-                    var parseMonthDayYear = d3.time.format("%m/%d/%y").parse;
-
-                    var dataForTimeline     = [],
-                        dateToLatLongToEventCount = {},
-                        dateToEventCount    = {};
-
-                    rawData.forEach(function(d, idx) {
-                        d.date_created = parseMonthDayYear(d.date_created);
-                        d.latitude     = +d.approx_latitude;
-                        d.longitude    = +d.approx_longitude;
-                        // colorScale(d.);
-
-                        if (!dateToEventCount[d.date_created]) {
-                            dateToEventCount[d.date_created] = 0;
-                        }
-                        dateToEventCount[d.date_created]++;
-                    });
-
-                    Object.keys(dateToEventCount).forEach(function(time) {
-                        dataForTimeline.push({
-                            date_created: new Date(time),
-                            ct_new_listings: dateToEventCount[time] });
-                    });
-
-                    dataForTimeline.sort(function(a,b) { return a.date_created - b.date_created; });
-
-                    makeVis(rawData, dataForTimeline, listings);
+                    makeVis(listings);
 
                 });
             }
 
-            function makeVis(rawData, dataForTimeline, listings) {
+            function makeVis(listings) {
+
+
                 map = MapChart("#map-container")
-                    .width(400)
-                    .height(400)
-                    .key(function(d) { return +d.key; })
+                    .width(350)
+                    .height(350)
+                    .key(function(d) { return d.key; })
                     .location(function(d) { return d.key; })
                     .radius(function(d) { return +d.value; })
 
                 d3.select("#map-container")
-                    .datum(listings.metrics.newListingsPerLocation.all())
+                    .datum(listings.groups.location.top(Infinity))
                     .call(map);
 
-                makeTimeline(rawData, dataForTimeline, listings);
+                byCapacity = dc.barChart("#people-capacity")
+                    .width(200)
+                    .height(150)
+                    .margins({top: 10, right: 10, bottom: 20, left: 40})
+                    .dimension(listings.dims.capacity)
+                    .group(listings.groups.capacity)
+                    .x( d3.scale
+                          .linear()
+                          .domain([0, 17]) )
+                    .elasticY(true)
+                    .gap(1)
+                    .centerBar(true)
+                    .round(function(v) { return dc.round.floor(v) + 0.5; })
+                    .alwaysUseRounding(true)
+                    // .renderHorizontalGridLines(true)
+                    .yAxisLabel('# listings')
+
+                dc.renderAll();
+
+                makeTimeline(listings);
             };
 
             // Creates the event timeline and sets up callbacks for brush changes
-            function makeTimeline(rawData, dataForTimeline, listings) {
-                var margin = { top: 10, right: 10, bottom: 20, left: 25 },
+            function makeTimeline(listings) {
+                var data = listings.groups.dateCreated
+                    .top(Infinity)
+                    .sort(function(a,b) { return a.key - b.key; }) //listings.metrics.newListingsPerDay().top(Infinity); //listings.
+
+                var margin = { top: 30, right: 10, bottom: 20, left: 25 },
                     width  = 2*map.width() - margin.left - margin.right,
-                    height = 100 - margin.top  - margin.bottom;
+                    height = 130 - margin.top  - margin.bottom;
 
                 var timelineSvg = d3.select("#timeline-container").append("svg")
                     .attr("width", width + margin.left + margin.right)
@@ -97,12 +103,14 @@
                     .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
                 var x = d3.time.scale()
-                    // .domain(d3.extent(dataForTimeline.map(function(d) { return d.date_created; })))
-                    .range([0, width]);
+                    .domain(overrideTimeDomain)
+                    .range([0, width])
+                    .clamp(true);
 
                 var y = d3.scale.linear()
-                    // .domain(d3.extent(dataForTimeline.map(function(d) { return d.ct_new_listings; })))
-                    .range([height, 0]);
+                    .domain([0, 20]) //d3.extent(data, function(d) { return +d.value; }))
+                    .range([height, 0])
+                    .clamp(true);
 
                 var xAxis = d3.svg.axis()
                     .scale(x)
@@ -115,12 +123,13 @@
 
                 var area = d3.svg.area()
                     .interpolate("linear")
-                    .x(function(d) { return x(d.date_created); })
+                    .x(function(d) { return x(d.key); })
                     .y0(height)
-                    .y1(function(d) { return y(d.ct_new_listings); });
+                    .y1(function(d) { return y(d.value); });
 
                 timeline.append("path")
                     // .datum(dataForTimeline)
+                    .datum(data)
                     .attr("class", "area")
                     .attr("d", area);
 
@@ -142,8 +151,10 @@
                 // Add brush to timeline, hook up to callback
                 var brush = d3.svg.brush()
                     .x(x)
-                    .on("brush", function() { brushCallback(brush, rawData, listings); })
-                    .extent([new Date("12/1/2013"), new Date("1/1/2014")]); // initial value
+                    .on("brush", function() {
+                        brushCallback(brush, listings);
+                    })
+                    .extent([new Date("12/1/2014"), new Date("1/1/2015")]); // initial value
 
                 timeline.append("g")
                     .attr("class", "x brush")
@@ -152,27 +163,16 @@
                     .attr("y", -6)
                     .attr("height", height + 7);
 
-                // brush.event(timeline.select('g.x.brush')); // dispatches a single brush event
+                brush.event(timeline.select('g.x.brush')); // dispatches a single brush event
             };
 
             // Called whenever the timeline brush range (extent) is updated
             // Filters the map data to those points that fall within the selected timeline range
-            function brushCallback(brush, rawData) {
-                if (brush.empty()) {
-                    map.updatePoints([]);
-                } else {
-                    var newDateRange = brush.extent(),
-                        filteredData = [];
+            function brushCallback(brush, listings) {
+                listings.dims.dateCreated.filter(brush.extent())
+                map.updatePoints( listings.groups.location.top(Infinity) );
 
-                    rawData.forEach(function(d) {
-                        if (d.date_created >= newDateRange[0] && d.date_created <= newDateRange[1]) {
-                            filteredData.push(d);
-                        }
-                    });
-
-                    map.updatePoints(filteredData);
-                    // updateTitleText(newDateRange, filteredData);
-                }
+                dc.redrawAll();
             }
         </script>
     </body>

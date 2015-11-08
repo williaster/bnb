@@ -2,6 +2,7 @@ var MapChart = function(containerId) {
     // Lots of private variables
     var width  = 400
     var height = 400
+    var legend
 
     // more vars for caller
     var mapData;
@@ -11,7 +12,7 @@ var MapChart = function(containerId) {
     var locationAccessor = function(d) { return d.value; }
     var userAddedLabels  = [];
     var constantRadius   = false;
-    var showLegend       = false;
+    var showLegend       = true;
     var mapScale         = 220000;
     var mapCenter        = [-120.1, 39.14]; // tahoe
 
@@ -24,7 +25,7 @@ var MapChart = function(containerId) {
     // Size related
     var defaultRadius = 4;
     var radiusScale = d3.scale.sqrt()
-        .range([2, 15]);
+        .range([0, 15]);
 
     // Map tiles
     var tile = d3.geo.tile();
@@ -39,7 +40,7 @@ var MapChart = function(containerId) {
     var zoom = d3.behavior.zoom()
         .on("zoom", onZoom);
 
-    var mapSvg, dataG, tilesG;
+    var mapSvg, dataG, tilesG, legend;
 
     var map = function(selection) {
         selection.each(function(data, index) {
@@ -68,20 +69,55 @@ var MapChart = function(containerId) {
             dataG  = mapSvg.append("g")
                 .attr("class", "data-layer");
 
-            onZoom(); // @todo how to pass data?
+            if (showLegend && radiusAccessor) {
+                legend = getLegend(mapSvg, radiusScale);
+            }
+
+            onZoom();
             map.updateChart(data);
         });
     };
 
+    function getLegend(svg, scale) {
+        svg.append("g")
+            .attr("class", "legend")
+            .attr("transform", "translate(20, 40)");
+
+        var legend = d3.legend.size()
+            .scale(radiusScale)
+            .shape('circle')
+            .shapePadding(12)
+            .labelOffset(15)
+            .orient('horizontal');
+
+        legend.update = function() {
+            svg.select("g.legend")
+              .call(legend);
+
+            return legend;
+        };
+
+        return legend.update();
+
+    }
+
     map.updateChart = function(nextData) {
         // update domains if accessors passed  @TODO legend
-        if (radiusAccessor) radiusScale.domain(d3.extent(nextData, radiusAccessor));
+        if (radiusAccessor) {
+            radiusScale.domain([0, Math.max(2, d3.max(nextData, radiusAccessor)) ]);
+
+            if (showLegend) {
+                legend.update();
+            }
+        }
         if (colorAccessor)  colorScale.domain(d3.extent(nextData, colorAccessor));
 
         var dataCircles = dataG.selectAll("circle.data")
             .data(nextData, dataKeyAccessor);
 
         dataCircles // update existing points
+          .transition()
+            .duration(500)
             .attr("fill", function(d) {
                 return colorAccessor ? colorScale(colorAccessor(d)) : defaultCircleColor;
             })
