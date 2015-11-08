@@ -10,22 +10,45 @@ svg {
 .ib {
     display: inline-block;
 }
+.supply, .demand {
+    width: 580px;
+    overflow: hidden;
+}
 .chart-label {
     font-size: 16px;
     font-weight: bold;
     text-rendering: optimizeLegibility;
     letter-spacing: 0.75px;
-    margin: .3em 0 .1em 0;
+    margin: 5px 0 3px 0;
 }
 #map-container {
-    padding: 15px;
+    /*margin-top: 10px;*/
 }
 .map {
     border: 1px solid #ddd;
     cursor: all-scroll;
 }
+.row rect {
+    cursor: pointer;
+}
+
+.row rect,
+.row .selected,
 .bar {
     fill: #d01c8b;
+}
+.row .deselected,
+.bar.deselected {
+    fill: #ddd;
+}
+.tick .grid-line {
+    stroke: none;
+    fill: none;
+}
+
+.resize path {
+    fill: none;
+    stroke: none;
 }
 
 circle.data {

@@ -20,22 +20,34 @@
     <body>
         <div id="airbnb-dashboard">
             <div class="chart-label">Airbnb Tahoe Market</div>
+            <br/>
             <div id="loading"></div>
-            <div id="timeline-container">
-                <div class="chart-label">New Listings</div>
-            </div>
-            <div>
+            <div class="supply">
+                <div id="timeline-container">
+                    <div class="chart-label">New Listings</div>
+                </div>
+
+                <div class="dimensions">
+                    <div id="people-capacity" class="ib">
+                        <div class="chart-label">People capacity</div>
+                    </div>
+                    <div id="listing-type" class="ib">
+                        <div class="chart-label">Type</div>
+                    </div>
+                    <div id="instant-bookable" class="ib">
+                        <div class="chart-label">Instantly bookable</div>
+                    </div>
+                </div>
+
                 <div id="map-container" class="ib">
                     <div class="chart-label">By location</div>
                 </div>
-                <div id="people-capacity" class="ib">
-                    <div class="chart-label">People capacity</div>
-                </div>
             </div>
+
         </div>
         <script>
             var overrideTimeDomain = [new Date("1/1/2013"), new Date("1/1/2015")];
-            var map, byCapacity;
+            var map, byCapacity, byType, byInstant;
             initVis();
 
             function initVis() {
@@ -49,10 +61,8 @@
             }
 
             function makeVis(listings) {
-
-
                 map = MapChart("#map-container")
-                    .width(350)
+                    .width(575)
                     .height(350)
                     .key(function(d) { return d.key; })
                     .location(function(d) { return d.key; })
@@ -65,7 +75,7 @@
                 byCapacity = dc.barChart("#people-capacity")
                     .width(200)
                     .height(150)
-                    .margins({top: 10, right: 10, bottom: 20, left: 40})
+                    .margins({top: 10, right: 10, bottom: 20, left: 35})
                     .dimension(listings.dims.capacity)
                     .group(listings.groups.capacity)
                     .x( d3.scale
@@ -79,6 +89,25 @@
                     // .renderHorizontalGridLines(true)
                     .yAxisLabel('# listings')
 
+                byType = dc.rowChart("#listing-type")
+                    .width(150)
+                    .height(150)
+                    .margins({top: 10, right: 10, bottom: 20, left: 10})
+                    .dimension(listings.dims.type)
+                    .group(listings.groups.type)
+                    .elasticX(true)
+                    .xAxis().ticks(5);
+
+
+                byInstant = dc.rowChart("#instant-bookable")
+                    .width(75)
+                    .height(150)
+                    .margins({top: 10, right: 10, bottom: 20, left: 10})
+                    .dimension(listings.dims.instantBookable)
+                    .group(listings.groups.instantBookable)
+                    .elasticX(true)
+                    .xAxis().ticks(2);
+
                 dc.renderAll();
 
                 makeTimeline(listings);
@@ -90,8 +119,8 @@
                     .top(Infinity)
                     .sort(function(a,b) { return a.key - b.key; }) //listings.metrics.newListingsPerDay().top(Infinity); //listings.
 
-                var margin = { top: 30, right: 10, bottom: 20, left: 25 },
-                    width  = 2*map.width() - margin.left - margin.right,
+                var margin = { top: 35, right: 15, bottom: 20, left: 25 },
+                    width  = 575 - margin.left - margin.right,
                     height = 130 - margin.top  - margin.bottom;
 
                 var timelineSvg = d3.select("#timeline-container").append("svg")
@@ -127,8 +156,19 @@
                     .y0(height)
                     .y1(function(d) { return y(d.value); });
 
+                var dateRange = timelineSvg.append("g")
+                    .attr("class", "timeline-range")
+                    .attr("transform", "translate(" + (width + margin.left + margin.right) + ",10)")
+                  .append("text")
+                    .attr("text-anchor", "end");
+
+                var listingCount = timelineSvg.append("g")
+                    .attr("class", "listing-count")
+                    .attr("transform", "translate(" + (width + margin.left + margin.right) + ",25)")
+                  .append("text")
+                    .attr("text-anchor", "end");
+
                 timeline.append("path")
-                    // .datum(dataForTimeline)
                     .datum(data)
                     .attr("class", "area")
                     .attr("d", area);
@@ -152,7 +192,11 @@
                 var brush = d3.svg.brush()
                     .x(x)
                     .on("brush", function() {
-                        brushCallback(brush, listings);
+                        var extent = brush.extent().map(d3.time.day.round);
+                        listings.dims.dateCreated.filter(extent)
+                        dateRange.text(formatDateRange(extent));
+                        listingCount.text(getListingsCount(listings, extent))
+                        redrawAll(listings);
                     })
                     .extent([new Date("12/1/2014"), new Date("1/1/2015")]); // initial value
 
@@ -164,16 +208,20 @@
                     .attr("height", height + 7);
 
                 brush.event(timeline.select('g.x.brush')); // dispatches a single brush event
+
+                function formatDateRange(range) {
+                    var format = d3.time.format("%a %b %d %Y");
+                    return format(range[0]) + " - " + format(range[1]);
+                };
+                function getListingsCount(listings, extent) {
+                    return listings.dims.location.top(Infinity).length + " new listings";
+                };
             };
 
-            // Called whenever the timeline brush range (extent) is updated
-            // Filters the map data to those points that fall within the selected timeline range
-            function brushCallback(brush, listings) {
-                listings.dims.dateCreated.filter(brush.extent())
-                map.updatePoints( listings.groups.location.top(Infinity) );
-
-                dc.redrawAll();
-            }
+        function redrawAll(listings) {
+            map.updatePoints( listings.groups.location.top(Infinity) );
+            dc.redrawAll();
+        };
         </script>
     </body>
 </html>

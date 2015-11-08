@@ -12,7 +12,7 @@ var MapChart = function(containerId) {
     var locationAccessor = function(d) { return d.value; }
     var userAddedLabels  = [];
     var constantRadius   = false;
-    var showLegend       = true;
+    var showLegend       = false;
     var mapScale         = 220000;
     var mapCenter        = [-120.1, 39.14]; // tahoe
 
@@ -44,7 +44,6 @@ var MapChart = function(containerId) {
 
     var map = function(selection) {
         selection.each(function(data, index) {
-            console.log("MapChart called with data", data);
             tile.size([width, height]);
 
             // Data projection
