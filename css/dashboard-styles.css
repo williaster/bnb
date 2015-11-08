@@ -2,6 +2,7 @@
 
 body {
     font-family: "Helvetica Neue", Helvetica, sans-serif;
+    shape-rendering: crispEdges;
 }
 
 svg {
@@ -10,9 +11,14 @@ svg {
 .ib {
     display: inline-block;
 }
+
 .supply, .demand {
+    vertical-align: top;
     width: 580px;
+    display: inline-block;
     overflow: hidden;
+    background-color: #fafafa;
+    padding: 10px;
 }
 .chart-label {
     font-size: 16px;
@@ -45,12 +51,25 @@ svg {
     stroke: none;
     fill: none;
 }
-
 .resize path {
     fill: none;
     stroke: none;
 }
 
+/* calendar */
+.day {
+  fill: #fff;
+  stroke: #ccc;
+}
+
+.month {
+  fill: none;
+  stroke: #000;
+  stroke-width: 1.5px;
+
+}
+
+/* map */
 circle.data {
     stroke: none;
 }

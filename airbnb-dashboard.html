@@ -13,7 +13,9 @@
 
         <!-- Project files -->
         <script src="./js/map.js"></script>
+        <script src="./js/calendar-heatmap.js"></script>
         <script src="./js/data-munging.js"></script>
+
         <link type="txt/css" rel="stylesheet" href="./css/dashboard-styles.css">
 
     </head>
@@ -25,6 +27,7 @@
             <div class="supply">
                 <div id="timeline-container">
                     <div class="chart-label">New Listings</div>
+
                 </div>
 
                 <div class="dimensions">
@@ -44,23 +47,38 @@
                 </div>
             </div>
 
+            <div class="demand">
+                <div id="calendar-container">
+                    <div class="chart-label">Demand</div>
+                </div>
+            </div>
+
         </div>
         <script>
             var overrideTimeDomain = [new Date("1/1/2013"), new Date("1/1/2015")];
-            var map, byCapacity, byType, byInstant;
+            var map, byCapacity, byType, byInstant, calendar;
             initVis();
 
             function initVis() {
                 // Fetch data
-                d3.csv("../../data/listings.csv", function(error, rawData) {
-                    if (error) return console.error(error);
-                    var listings = mungeData(rawData);
-                    makeVis(listings);
+                d3.csv("../../data/listings.csv", function(error, listingsRaw) {
+                    if (error) return console.error("listings error", error);
+
+                    d3.csv("../../data/interactions.csv", function(error, interactionsRaw) {
+
+                        var parsed = mungeData(listingsRaw, interactionsRaw);
+                        makeVis(parsed);
+                    });
+
+
 
                 });
             }
 
-            function makeVis(listings) {
+            function makeVis(parsed) {
+                var listings     = parsed.listings;
+                var interactions = parsed.interactions;
+
                 map = MapChart("#map-container")
                     .width(575)
                     .height(350)
@@ -111,6 +129,12 @@
                 dc.renderAll();
 
                 makeTimeline(listings);
+
+                calendar = CalendarHeatmap("#calendar-container")
+                    .dimension(interactions.dims.checkinDate)
+                    .group(interactions.groups.checkinDate);
+
+                calendar.redraw();
             };
 
             // Creates the event timeline and sets up callbacks for brush changes
@@ -192,7 +216,7 @@
                 var brush = d3.svg.brush()
                     .x(x)
                     .on("brush", function() {
-                        var extent = brush.extent().map(d3.time.day.round);
+                        var extent = brush.extent().map(d3.time.day.round); // snap to days
                         listings.dims.dateCreated.filter(extent)
                         dateRange.text(formatDateRange(extent));
                         listingCount.text(getListingsCount(listings, extent))

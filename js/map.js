@@ -1,8 +1,8 @@
+// @TODO tooltip
 var MapChart = function(containerId) {
     // Lots of private variables
-    var width  = 400
-    var height = 400
-    var legend
+    var width  = 400;
+    var height = 400;
 
     // more vars for caller
     var mapData;

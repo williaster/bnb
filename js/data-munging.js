@@ -1,11 +1,14 @@
 // requires d3 + crossfilter libs
-var mungeData = function(data) {
-    var monthDayYear = d3.time.format("%m/%d/%y").parse;
-    console.log(data[0])
-    data.sort(function(a,b) { return a.date_created - a.date_created; })
+var monthDayYear = d3.time.format("%m/%d/%y").parse;
+var yearMonthDay = d3.time.format("%Y-%m-%d").parse;
+var yearMonthDayHourMinuteSecond = d3.time.format("%Y-%m-%d %H:%M:%S.%L").parse;
 
+var parseListings = function(rawData) {
+    console.log("listings", rawData[0])
     var listings = {};
-    var cf   = listings.crossfilter = crossfilter(data);
+
+    var cf = listings.crossfilter = crossfilter(rawData);
+
     var dims = listings.dims = {
         dateCreated:     cf.dimension(function(d) { return monthDayYear(d.date_created); }),
         location:        cf.dimension(function(d) { return [+d.approx_longitude, +d.approx_latitude]; }),
@@ -24,14 +27,33 @@ var mungeData = function(data) {
         instantBookable: dims.instantBookable.group()
     };
 
-    listings.metrics = {
-        newListingsPerDay: function() {
-            return groups.dateCreated.reduceCount();
-        },
-        newListingsPerLocation: function() {
-            return groups.location.reduceCount();
-        }
+    return listings;
+}
+
+var parseInteractions = function(rawData) {
+    rawData = rawData.filter(function(d) { return d.first_interaction_time_utc; });
+    console.log("raw interactions", rawData.length);
+
+    var interactions = {};
+
+    var cf = interactions.crossfilter = crossfilter(rawData);
+
+    var dims = interactions.dims = {
+        checkinDate: cf.dimension(function(d) { return yearMonthDay(d.checkin_date); }),
+        firstInteraction: cf.dimension(function(d) { return yearMonthDayHourMinuteSecond(d.first_interaction_time_utc); })
     };
 
-    return listings;
+    var groups = interactions.groups = {
+        checkinDate: dims.checkinDate.group(),
+        firstInteraction: dims.firstInteraction.group()
+    };
+
+    return interactions;
+}
+
+var mungeData = function(listingsData, interactionsData) {
+    var listings     = parseListings(listingsData);
+    var interactions = parseInteractions(interactionsData);
+
+    return { listings, interactions};
 };
