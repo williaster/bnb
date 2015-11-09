@@ -39,13 +39,31 @@ var parseInteractions = function(rawData) {
     var cf = interactions.crossfilter = crossfilter(rawData);
 
     var dims = interactions.dims = {
-        checkinDate: cf.dimension(function(d) { return yearMonthDay(d.checkin_date); }),
-        firstInteraction: cf.dimension(function(d) { return yearMonthDayHourMinuteSecond(d.first_interaction_time_utc); })
+        checkinDate: cf.dimension(function(d) {
+            return yearMonthDay(d.checkin_date);
+        }),
+        firstInteraction: cf.dimension(function(d) {
+            return yearMonthDayHourMinuteSecond(d.first_interaction_time_utc);
+        }),
+        nights: cf.dimension(function(d) {
+            return +d.nights;
+        }),
+        guests: cf.dimension(function(d) {
+            var num = +d.guests;
+            return isNaN(num) ? 1 : num;
+        }),
+        originCountry: cf.dimension(function(d) {
+            return d.guest_origin_country;
+        })
+        // replied:   cf.dimension(function(d) { return d. } )
     };
 
     var groups = interactions.groups = {
         checkinDate: dims.checkinDate.group(),
-        firstInteraction: dims.firstInteraction.group()
+        firstInteraction: dims.firstInteraction.group(),
+        nights: dims.nights.group(),
+        guests: dims.guests.group(),
+        originCountry: dims.originCountry.group()
     };
 
     return interactions;

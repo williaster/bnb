@@ -23,40 +23,57 @@
         <div id="airbnb-dashboard">
             <div class="chart-label">Airbnb Tahoe Market</div>
             <br/>
-            <div id="loading"></div>
-            <div class="supply">
-                <div id="timeline-container">
-                    <div class="chart-label">New Listings</div>
-
+            <div id="loading">Loading ...</div>
+            <div id="vis" style="display:none;">
+                <div class="timeline">
+                    <!-- @TODO -->
                 </div>
 
-                <div class="dimensions">
-                    <div id="people-capacity" class="ib">
-                        <div class="chart-label">People capacity</div>
+                <div class="supply">
+                    <div id="timeline-container">
+                        <div class="chart-label">New Listings</div>
                     </div>
-                    <div id="listing-type" class="ib">
-                        <div class="chart-label">Type</div>
+
+                    <div id="map-container" class="ib">
+                        <div class="chart-label">Location</div>
                     </div>
-                    <div id="instant-bookable" class="ib">
-                        <div class="chart-label">Instantly bookable</div>
+
+                    <div class="dimensions">
+                        <div id="people-capacity" class="ib">
+                            <div class="chart-label">People capacity</div>
+                        </div>
+                        <div id="listing-type" class="ib">
+                            <div class="chart-label">Type</div>
+                        </div>
+                        <div id="instant-bookable" class="ib">
+                            <div class="chart-label">Book Instantly</div>
+                        </div>
                     </div>
                 </div>
 
-                <div id="map-container" class="ib">
-                    <div class="chart-label">By location</div>
+                <div class="demand">
+                    <div id="calendar-container">
+                        <div class="chart-label">Demand</div>
+                    </div>
+                    <div class="dimensions">
+                        <div id="number-of-nights" class="ib">
+                            <div class="chart-label"># Nights</div>
+                        </div>
+                        <div id="number-of-guests" class="ib">
+                            <div class="chart-label"># Guests</div>
+                        </div>
+                        <div id="origin-country" class="ib">
+                            <div class="chart-label">Home Country</div>
+                        </div>
+                    </div>
                 </div>
             </div>
-
-            <div class="demand">
-                <div id="calendar-container">
-                    <div class="chart-label">Demand</div>
-                </div>
-            </div>
-
         </div>
         <script>
             var overrideTimeDomain = [new Date("1/1/2013"), new Date("1/1/2015")];
-            var map, byCapacity, byType, byInstant, calendar;
+            var map, byCapacity, byType, byInstant,
+                calendar, byNights, byGuests, byCountry;
+
             initVis();
 
             function initVis() {
@@ -65,8 +82,11 @@
                     if (error) return console.error("listings error", error);
 
                     d3.csv("../../data/interactions.csv", function(error, interactionsRaw) {
-
                         var parsed = mungeData(listingsRaw, interactionsRaw);
+
+                        d3.select("#loading").remove();
+                        d3.select("#vis").style("display", "block");
+
                         makeVis(parsed);
                     });
 
@@ -104,7 +124,6 @@
                     .centerBar(true)
                     .round(function(v) { return dc.round.floor(v) + 0.5; })
                     .alwaysUseRounding(true)
-                    // .renderHorizontalGridLines(true)
                     .yAxisLabel('# listings')
 
                 byType = dc.rowChart("#listing-type")
@@ -123,18 +142,79 @@
                     .margins({top: 10, right: 10, bottom: 20, left: 10})
                     .dimension(listings.dims.instantBookable)
                     .group(listings.groups.instantBookable)
-                    .elasticX(true)
-                    .xAxis().ticks(2);
+                    .elasticX(true).on("filtered", function() {
+                        map.updatePoints( listings.groups.location.top(Infinity) );
+                    })
+                    .xAxis().ticks(2)
 
-                dc.renderAll();
-
-                makeTimeline(listings);
-
-                calendar = CalendarHeatmap("#calendar-container")
+                // Demand side
+                calendar = $calendar = CalendarHeatmap("#calendar-container")
                     .dimension(interactions.dims.checkinDate)
                     .group(interactions.groups.checkinDate);
 
                 calendar.redraw();
+
+                byNights = dc.barChart("#number-of-nights")
+                    .width(180)
+                    .height(150)
+                    .margins({top: 10, right: 10, bottom: 20, left: 50})
+                    .dimension(interactions.dims.nights)
+                    .group(interactions.groups.nights)
+                    .x( d3.scale
+                          .linear()
+                          .domain([0, 20]) )
+                    .elasticY(true)
+                    .gap(1)
+                    .centerBar(true)
+                    .round(function(v) { return dc.round.floor(v) + 0.5; })
+                    .alwaysUseRounding(true)
+                    .yAxisLabel('# Interactions')
+                    .on("filtered", function() {
+                        console.log("on filtered")
+                        calendar.redraw();
+                    });
+
+                byNights.xAxis().ticks(5)
+                byNights.yAxis().ticks(4)
+
+                byGuests = dc.barChart("#number-of-guests")
+                    .width(180)
+                    .height(150)
+                    .margins({top: 10, right: 10, bottom: 20, left: 50})
+                    .dimension(interactions.dims.guests)
+                    .group(interactions.groups.guests)
+                    .x( d3.scale
+                          .linear()
+                          .domain([0, 15]) )
+                    .elasticY(true)
+                    .gap(1)
+                    .centerBar(true)
+                    .round(function(v) { return dc.round.floor(v) + 0.5; })
+                    .alwaysUseRounding(true)
+                    .yAxisLabel('# Interactions')
+                    .on("filtered", function() { calendar.redraw(); });
+
+                byGuests.xAxis().ticks(5)
+                byGuests.yAxis().ticks(4)
+
+                byCountry = dc.rowChart("#origin-country")
+                    .width(200)
+                    .height(150)
+                    .margins({top: 10, right: 10, bottom: 20, left: 10})
+                    .dimension(interactions.dims.originCountry)
+                    .group(interactions.groups.originCountry)
+                    .elasticX(true)
+                    .data(function(group) { return group.top(10); })
+                    .on("filtered", function() { calendar.redraw(); });
+                    // .x(d3.scale.log().nice().domain([1, 1000]).clamp(true))
+
+                byCountry.xAxis()
+                    .ticks(3)
+                    .scale().domain([0,500]).clamp(true)
+
+                dc.renderAll();
+                makeTimeline(listings);
+
             };
 
             // Creates the event timeline and sets up callbacks for brush changes
@@ -244,6 +324,7 @@
 
         function redrawAll(listings) {
             map.updatePoints( listings.groups.location.top(Infinity) );
+            calendar.redraw();
             dc.redrawAll();
         };
         </script>
