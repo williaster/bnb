@@ -14,9 +14,11 @@
         <!-- Project files -->
         <script src="./js/map.js"></script>
         <script src="./js/calendar-heatmap.js"></script>
-        <script src="./js/data-munging.js"></script>
+        <script src="./js/reusable-linechart.js"></script>
+        <script src="./js/parse-data.js"></script>
 
         <link type="txt/css" rel="stylesheet" href="./css/dashboard-styles.css">
+        <link type="txt/css" rel="stylesheet" href="./css/reusable-linechart.css">
 
     </head>
     <body>
@@ -25,8 +27,11 @@
             <br/>
             <div id="loading">Loading ...</div>
             <div id="vis" style="display:none;">
-                <div class="timeline">
-                    <!-- @TODO -->
+                <div class="hero">
+                    <div id="timeline">
+                        <div class="date-summary"></div>
+                        <div class="zoom"></div>
+                    </div>
                 </div>
 
                 <div class="supply">
@@ -62,17 +67,20 @@
                         <div id="number-of-guests" class="ib">
                             <div class="chart-label"># Guests</div>
                         </div>
-                        <div id="origin-country" class="ib">
-                            <div class="chart-label">Home Country</div>
+                        <div id="time-to-reply" class="ib">
+                            <div class="chart-label">Response time</div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
         <script>
+            var listingsColor     = "#4dac26";
+            var interactionsColor = "#d01c8b";
             var overrideTimeDomain = [new Date("1/1/2013"), new Date("1/1/2015")];
+            var initialTimerange   = [new Date("12/1/2014"), new Date("1/1/2015")];
             var map, byCapacity, byType, byInstant,
-                calendar, byNights, byGuests, byCountry;
+                calendar, byNights, byGuests, timeToReply;
 
             initVis();
 
@@ -106,9 +114,9 @@
                     .location(function(d) { return d.key; })
                     .radius(function(d) { return +d.value; })
 
-                d3.select("#map-container")
-                    .datum(listings.groups.location.top(Infinity))
-                    .call(map);
+                // d3.select("#map-container")
+                //     .datum(listings.groups.location.top(Infinity))
+                //     .call(map);
 
                 byCapacity = dc.barChart("#people-capacity")
                     .width(200)
@@ -133,7 +141,7 @@
                     .dimension(listings.dims.type)
                     .group(listings.groups.type)
                     .elasticX(true)
-                    .xAxis().ticks(5);
+                    .xAxis().ticks(3);
 
 
                 byInstant = dc.rowChart("#instant-bookable")
@@ -197,133 +205,148 @@
                 byGuests.xAxis().ticks(5)
                 byGuests.yAxis().ticks(4)
 
-                byCountry = dc.rowChart("#origin-country")
+                timeToReply = dc.rowChart("#time-to-reply")
                     .width(200)
                     .height(150)
                     .margins({top: 10, right: 10, bottom: 20, left: 10})
-                    .dimension(interactions.dims.originCountry)
-                    .group(interactions.groups.originCountry)
+                    .dimension(interactions.dims.timeToReply)
+                    .group(interactions.groups.timeToReply)
                     .elasticX(true)
                     .data(function(group) { return group.top(10); })
-                    .on("filtered", function() { calendar.redraw(); });
-                    // .x(d3.scale.log().nice().domain([1, 1000]).clamp(true))
-
-                byCountry.xAxis()
-                    .ticks(3)
-                    .scale().domain([0,500]).clamp(true)
+                    .on("filtered", function() { calendar.redraw(); })
+                    .xAxis().ticks(5)
 
                 dc.renderAll();
-                makeTimeline(listings);
 
+                makeTimeline(listings, interactions);
             };
 
             // Creates the event timeline and sets up callbacks for brush changes
-            function makeTimeline(listings) {
-                var data = listings.groups.dateCreated
-                    .top(Infinity)
-                    .sort(function(a,b) { return a.key - b.key; }) //listings.metrics.newListingsPerDay().top(Infinity); //listings.
+            function makeTimeline(listings, interactions) {
+                var isZoomed = false;
+                var data = formatDataForTimeline(listings, interactions);
+                var filteredData; // on zoom
 
-                var margin = { top: 35, right: 15, bottom: 20, left: 25 },
-                    width  = 575 - margin.left - margin.right,
-                    height = 130 - margin.top  - margin.bottom;
+                var container    = d3.select("#timeline");
+                var dateRange    = d3.select("#timeline .date-summary");
+                // var countSummary = d3.select("#timeline .counts-summary");
+                var zoomToggle = d3.select("#timeline .zoom")
+                    .on("click", zoomOrResetTimeline);
 
-                var timelineSvg = d3.select("#timeline-container").append("svg")
-                    .attr("width", width + margin.left + margin.right)
-                    .attr("height", height + margin.top + margin.bottom);
+                var timeline = fancyLineChart('#timeline')
+                    .width(575)
+                    .height(100)
+                    .xAccessor(function(d) { return +d.key})
+                    .yAccessor(function(d) { return +d.value })
+                    .y2Accessor(function(d) { return +d.value })
+                    .axisY({ title: "# Listings", titleClass: "y-label listings-color" })
+                    .axisY2({ title: "# Interactions", titleClass: "y-label interactions-color" })
+                    .radiusAccessor(function(d) { return 0; })
+                    .onBrushed(onBrush);
 
-                var timeline = timelineSvg.append("g")
-                    .attr("class", "timeline")
-                    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+                timeline.xAxis().ticks(5);
+                timeline.yAxis().ticks(5);
+                timeline.y2Axis().ticks(5);
 
-                var x = d3.time.scale()
-                    .domain(overrideTimeDomain)
-                    .range([0, width])
-                    .clamp(true);
-
-                var y = d3.scale.linear()
-                    .domain([0, 20]) //d3.extent(data, function(d) { return +d.value; }))
-                    .range([height, 0])
-                    .clamp(true);
-
-                var xAxis = d3.svg.axis()
-                    .scale(x)
-                    .orient("bottom");
-
-                var yAxis = d3.svg.axis()
-                    .scale(y)
-                    .orient("left")
-                    .ticks(2);
-
-                var area = d3.svg.area()
-                    .interpolate("linear")
-                    .x(function(d) { return x(d.key); })
-                    .y0(height)
-                    .y1(function(d) { return y(d.value); });
-
-                var dateRange = timelineSvg.append("g")
-                    .attr("class", "timeline-range")
-                    .attr("transform", "translate(" + (width + margin.left + margin.right) + ",10)")
-                  .append("text")
-                    .attr("text-anchor", "end");
-
-                var listingCount = timelineSvg.append("g")
-                    .attr("class", "listing-count")
-                    .attr("transform", "translate(" + (width + margin.left + margin.right) + ",25)")
-                  .append("text")
-                    .attr("text-anchor", "end");
-
-                timeline.append("path")
+                d3.select("#timeline")
                     .datum(data)
-                    .attr("class", "area")
-                    .attr("d", area);
+                    .call(timeline);
 
-                timeline.append("g")
-                    .attr("class", "x axis")
-                    .attr("transform", "translate(0," + height + ")")
-                    .call(xAxis);
+                timeline.brush().extent(initialTimerange);
+                timeline.svg.select(".brush").call(timeline.brush());
+                onBrush();
 
-                timeline.append("g")
-                    .attr("class", "y axis")
-                    .call(yAxis);
+                function onBrush(brush, brushG) {
+                    brush = brush || timeline.brush();
+                    var extent = brush.extent().map(d3.time.day.round); // snap to days
 
-                timeline.append("text")
-                    .attr("transform", "rotate(-90)")
-                    .attr("dy", "1em")
-                    .style("text-anchor", "end")
-                    .text("New listings");
+                    listings.dims.dateCreated.filter(extent)
+                    interactions.dims.firstInteraction.filter(extent);
 
-                // Add brush to timeline, hook up to callback
-                var brush = d3.svg.brush()
-                    .x(x)
-                    .on("brush", function() {
-                        var extent = brush.extent().map(d3.time.day.round); // snap to days
-                        listings.dims.dateCreated.filter(extent)
-                        dateRange.text(formatDateRange(extent));
-                        listingCount.text(getListingsCount(listings, extent))
-                        redrawAll(listings);
-                    })
-                    .extent([new Date("12/1/2014"), new Date("1/1/2015")]); // initial value
+                    dateRange.html(formatDateRange(extent, brush.empty()));
+                    // listingCount.text(getListingsCount(listings, extent))
+                    redrawAll(listings);
 
-                timeline.append("g")
-                    .attr("class", "x brush")
-                    .call(brush)
-                  .selectAll("rect")
-                    .attr("y", -6)
-                    .attr("height", height + 7);
+                    if (brush.empty()) {
+                        zoomToggle.html("");
+                        timeline.updateChart(data);
+                    } else {
+                        zoomToggle.html("Zoom");
+                    }
+                }
 
-                brush.event(timeline.select('g.x.brush')); // dispatches a single brush event
+                // Formats for reusable linechart { name: string, values: [object] }
+                function formatDataForTimeline(listings, interactions) {
+                    var listingsGroup = listings.groups.dateCreated
+                        .top(Infinity)
+                        .sort(function(a,b) { return a.key - b.key; });
 
-                function formatDateRange(range) {
-                    var format = d3.time.format("%a %b %d %Y");
-                    return format(range[0]) + " - " + format(range[1]);
+                    var listingsData = {
+                        name: "new listings",
+                        color: listingsColor,
+                        axis: 0,
+                        values: listingsGroup.filter(function(d) {
+                            return d.key >= overrideTimeDomain[0] && d.key <= overrideTimeDomain[1];
+                        })
+                    };
+
+                    var interactionsGroup = interactions.groups.firstInteraction
+                        .top(Infinity)
+                        .sort(function(a,b) { return a.key - b.key; });
+
+                    var interactionsData = {
+                        name: "interactions",
+                        color: interactionsColor,
+                        axis: 1,
+                        values: interactionsGroup.filter(function(d) {
+                            return d.key >= overrideTimeDomain[0] && d.key <= overrideTimeDomain[1];
+                        })
+                    };
+
+                    var data = [listingsData, interactionsData];
+                    console.log(data);
+                    return data;
                 };
+
+                function zoomOrResetTimeline() {
+                    var brush = timeline.brush();
+                    filterToTimeRange(brush.extent());
+
+                    timeline.svg.select(".brush")
+                        .call(brush.clear());
+                };
+
+                function filterToTimeRange(extent) {
+                    filteredData = [];
+
+                    data.forEach(function(group) {
+                        var values = group.values.filter(function(d) {
+                            return d.key >= extent[0] && d.key <= extent[1];
+                        });
+                        filteredData.push(Object.assign({}, group, { values }));
+                    });
+
+                    timeline.updateChart(filteredData);
+                };
+
+                function formatDateRange(range, isEmpty) {
+                    if (isEmpty) {
+                        return "Select time range";
+                    }
+                    var format = d3.time.format("%a %b %d %Y");
+                    return "Showing data for <span class='emph'>" + format(range[0]) +
+                           "</span> &ndash; <span class='emph'>" + format(range[1]) + "</span>";
+                };
+
                 function getListingsCount(listings, extent) {
                     return listings.dims.location.top(Infinity).length + " new listings";
                 };
+
+                function getInteractionsCount(interactions, extent) {};
             };
 
         function redrawAll(listings) {
-            map.updatePoints( listings.groups.location.top(Infinity) );
+            // map.updatePoints( listings.groups.location.top(Infinity) );
             calendar.redraw();
             dc.redrawAll();
         };

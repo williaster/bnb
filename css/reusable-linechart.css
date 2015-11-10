@@ -1,0 +1,87 @@
+.fancy-linechart {
+    font-family: 'Open Sans', 'Helvetica', 'Arial', Sans-Serif;
+    font-size: 12px;
+}
+
+.fancy-linechart text { /* svg text */
+    font-size: 12px;
+    font-weight: 300;
+    fill: #999;
+    stroke: none;
+}
+
+.axis line {
+    fill: none;
+    stroke: #777;
+    shape-rendering: crispEdges;
+}
+
+.axis path { /* hides axis paths, only ticks are shown */
+    display: none;
+}
+
+.tick line,
+.zero-line path {
+    stroke: #ddd;
+}
+
+/* toggle stroke on to see invisible mouse detector polygons */
+.voronoi path {
+    fill: none;
+    pointer-events: all;
+/*    stroke: #333;
+    stroke-opacity: 0.04;*/
+}
+
+path.confidence-area  { /* confidence intervals */
+    opacity: 0.1;
+}
+
+path.linechart-line  { /* lines */
+    fill: none;
+    stroke-width: 1.5px;
+}
+
+.dot { /* ponts on lines */
+    stroke: #FFF;
+    stroke-width: 1px;
+    cursor: pointer;
+}
+
+/* brush rectangle for new limits */
+.linechart-brush .extent {
+    fill: #1f77b4;
+    fill-opacity: 0.25;
+    shape-rendering: crispEdges;
+}
+
+.linechart-brush .background {
+    cursor: default !important;
+}
+
+.time-window,
+.d3-tooltip {
+    pointer-events: none;
+}
+.y-value-line,
+.x-value-line {
+    stroke-dasharray: 3, 3;
+}
+
+/* Tooltips */
+.d3-tooltip {
+    word-wrap: break-word;
+    white-space: initial;
+    position: absolute;
+    font-size: 12px;
+    text-align: left;
+    width: auto;
+    height: auto;
+    pointer-events: none;
+    background-color: white;
+    padding: 15px;
+    border: 2px solid currentcolor;
+    color: currentcolor; /*text*/
+    z-index: 1000;
+    border-radius: 4px;
+}

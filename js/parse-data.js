@@ -1,9 +1,20 @@
 // requires d3 + crossfilter libs
+
+// For parsing dates with diff formats
 var monthDayYear = d3.time.format("%m/%d/%y").parse;
 var yearMonthDay = d3.time.format("%Y-%m-%d").parse;
 var yearMonthDayHourMinuteSecond = d3.time.format("%Y-%m-%d %H:%M:%S.%L").parse;
+var hourInMs = 1000 * 60 * 60;
+var dayInMs  = hourInMs * 24;
 
-var parseListings = function(rawData) {
+function mungeData(listingsData, interactionsData) {
+    var listings     = _parseListings(listingsData);
+    var interactions = _parseInteractions(interactionsData);
+
+    return $d = { listings, interactions};
+};
+
+function _parseListings(rawData) {
     console.log("listings", rawData[0])
     var listings = {};
 
@@ -30,9 +41,9 @@ var parseListings = function(rawData) {
     return listings;
 }
 
-var parseInteractions = function(rawData) {
+function _parseInteractions(rawData, instantlyBookableIds) {
     rawData = rawData.filter(function(d) { return d.first_interaction_time_utc; });
-    console.log("raw interactions", rawData.length);
+    console.log("interactions", rawData[0])
 
     var interactions = {};
 
@@ -43,7 +54,9 @@ var parseInteractions = function(rawData) {
             return yearMonthDay(d.checkin_date);
         }),
         firstInteraction: cf.dimension(function(d) {
-            return yearMonthDayHourMinuteSecond(d.first_interaction_time_utc);
+            return d3.time.day(
+                yearMonthDayHourMinuteSecond(d.first_interaction_time_utc)
+            );
         }),
         nights: cf.dimension(function(d) {
             return +d.nights;
@@ -54,7 +67,29 @@ var parseInteractions = function(rawData) {
         }),
         originCountry: cf.dimension(function(d) {
             return d.guest_origin_country;
-        })
+        }),
+        timeToReply: cf.dimension(function(d) {
+            var firstInteraction = yearMonthDayHourMinuteSecond(d.first_interaction_time_utc);
+            var firstReply       = yearMonthDayHourMinuteSecond(d.first_reply_time_utc);
+
+            if (firstInteraction !== null &&
+                firstReply !== null) {
+                var nearestHour = Math.round((firstReply - firstInteraction) / hourInMs) * hourInMs;
+                var nHours = nearestHour / 3600000;
+
+                return nHours + "-" + (nHours + 1) + " hrs";
+            }
+            else {
+                return "NA";
+            }
+        }),
+        // didReply: cf.dimension(function(d) {}),
+        // successfulRequest: cf.dimension(function(d) {
+
+        // })
+        // success: cf.dimension(function(d) {
+        //     return
+        // })
         // replied:   cf.dimension(function(d) { return d. } )
     };
 
@@ -63,15 +98,29 @@ var parseInteractions = function(rawData) {
         firstInteraction: dims.firstInteraction.group(),
         nights: dims.nights.group(),
         guests: dims.guests.group(),
-        originCountry: dims.originCountry.group()
+        originCountry: dims.originCountry.group(),
+        timeToReply: dims.timeToReply.group()
+        // success: dims.success.group().reduce(reduceAddAvg, reduceRemoveAvg, reduceInitAvg, "")
     };
 
     return interactions;
 }
 
-var mungeData = function(listingsData, interactionsData) {
-    var listings     = parseListings(listingsData);
-    var interactions = parseInteractions(interactionsData);
 
-    return { listings, interactions};
-};
+function reduceAddAvg(p,v,attr) {
+  ++p.count
+  p.sum += +v[attr];
+  p.avg = p.sum / p.count;
+  return p;
+}
+function reduceRemoveAvg(p,v,attr) {
+  --p.count
+  p.sum -= +v[attr];
+  p.avg = p.sum / p.count;
+  return p;
+}
+function reduceInitAvg() {
+  return { count: 0, sum: 0, avg: 0 };
+}
+// var statesAvgGroup = statesAvgDimension.group().reduce(reduceAddAvg, reduceRemoveAvg, reduceInitAvg, 'savings');
+// var statesAvgGroup = statesAvgDimension.group().reduce(reduceAddAvg, reduceRemoveAvg, reduceInitAvg, 'cost');

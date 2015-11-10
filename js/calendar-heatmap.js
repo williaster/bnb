@@ -2,7 +2,7 @@ var CalendarHeatmap = function(containerId) {
     var colors = ["#feebe2", "#fbb4b9", "#f768a1", "#c51b8a", "#7a0177"];
     var margin = { left: 15, right: 15 };
     var width  = 600 - margin.left - margin.right;
-    var height = 90; // per chart!
+    var height = 95; // per chart!
     var cellSize = 10.5;
 
     var colorScale = d3.scale.quantize();
@@ -12,15 +12,32 @@ var CalendarHeatmap = function(containerId) {
     var dateAccessor  = function(d) { return d.key; };
     var valueAccessor = function(d) { return +d.value };
 
+    // note scales are for the brush only
+    var brush = d3.svg.brush()
+        .x(d3.scale.identity().domain([margin.left, width + 2]))
+        .y(d3.scale.identity().domain([height - (cellSize * 7) - 1, (2 * height) - (cellSize * 7) - 1]))
+        .on("brushend", onBrush);
+
+    function onBrush() {
+        var extent = d3.event.target.extent();
+        var weekLow  = Math.floor((extent[0][0] - margin.left) / cellSize);
+        var weekHigh = Math.ceil((extent[1][0] - margin.left) / cellSize);
+        var dayLow   = Math.floor((extent[0][1] - 20.5) / cellSize);
+        var dayHigh  = Math.ceil((Math.min(height, extent[1][1]) - 20.5) / cellSize);
+        // d3.select(this).transition()
+          // .call(brush.extent(extent1))
+          // .call(brush.event);
+    };
+
     var dimension, group, legend;
 
     var calendar = {}; // returned object
 
+    // @TODO check whether labels are defined
     calendar.render = calendar.redraw = function() {
         if (!dimension || !group) console.warn("no dimension or group to plot");
 
         var data = group.top(Infinity);
-        console.log(data.length, "unique dates", data[0])
 
         var dataByDate = d3.nest()
             .key(function(d) {
@@ -31,8 +48,6 @@ var CalendarHeatmap = function(containerId) {
             })
             .map(data);
 
-        console.log("dataByDate", dataByDate);
-
         var yearRange = d3.extent(data, function(d) { return +formatYear(dateAccessor(d)); });
 
         if (yearRange[0] === yearRange[1]) {
@@ -42,8 +57,6 @@ var CalendarHeatmap = function(containerId) {
         colorScale
             .range(colors)
             .domain(d3.extent(data, valueAccessor));
-
-        console.log("color domain", colorScale.domain());
 
         // Each year
         var yearSvg = d3.select(containerId).selectAll("svg")
@@ -63,14 +76,18 @@ var CalendarHeatmap = function(containerId) {
             .style("text-anchor", "middle")
             .text(function(d) { return d; })
 
-        var dowLabels = yearSvg.select("g").append("g")
-          .attr("transform", "translate(" + (width - 5) + ",0)")
+        var dowLabels = yearSvg.select("g")
+          .append("g")
+            .attr("class", "dow label")
+            .attr("transform", "translate(" + (width - 5) + ",0)")
             .selectAll("dow")
             .data(["M", "T", "W", "T", "F", "S", "S"])
           .enter().append("text")
             .attr("transform", function(d,i) { return "translate(0," + ((i + 1) * cellSize - 1) + ")"; })
             .style("text-anchor", "middle")
             .text(function(d) { return d; });
+
+        yearSvg.call(brush);
 
         // Each day
         var days = yearSvg.select("g").selectAll(".day")
@@ -110,6 +127,17 @@ var CalendarHeatmap = function(containerId) {
             .attr("class", "month");
 
         months.attr("d", monthPath);
+
+        var monthLabels = yearSvg.select("g")
+          .append("g")
+            .attr("class", "month label")
+            .selectAll("text")
+            .data(["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"])
+          .enter().append("text")
+            .attr("transform", function(d,i) { return "translate(" + (4.21 * (i + 0.5) * (width/52)) + ",-6)"; })
+            .style("text-anchor", "middle")
+            .text(function(d) { return d; });
+
 
         return this;
     };
