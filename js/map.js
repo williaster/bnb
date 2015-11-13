@@ -13,12 +13,11 @@ var MapChart = function(containerId) {
     var userAddedLabels  = [];
     var constantRadius   = false;
     var showLegend       = false;
-    var mapScale         = 220000;
+    var mapScale         = 180000;
     var mapCenter        = [-120.1, 39.14]; // tahoe
 
     // Color related
-    var defaultCircleColor = "#d01c8b";
-    var circleOpacity      = 0.4;
+    var defaultCircleColor = "#0571b0"; //"#4dac26"; //"#d01c8b";
     var colorScale = d3.scale.linear()
         .range(["#d01c8b","#4dac26"]);
 
@@ -40,7 +39,7 @@ var MapChart = function(containerId) {
     var zoom = d3.behavior.zoom()
         .on("zoom", onZoom);
 
-    var mapSvg, dataG, tilesG, legend;
+    var mapSvg, dataG, tilesG, legend, tooltip;
 
     var map = function(selection) {
         selection.each(function(data, index) {
@@ -53,7 +52,7 @@ var MapChart = function(containerId) {
 
             // Map zoom
             zoom.scale(dataProjection.scale() * 2 * Math.PI)
-                .scaleExtent([1 << 10, 1 << 20])
+                .scaleExtent([1 << 12, 1 << 20])
                 .translate(dataProjection(mapCenter).map(function(x) { return -x; }))
 
             mapSvg = d3.select(containerId).append("svg")
@@ -72,10 +71,42 @@ var MapChart = function(containerId) {
                 legend = getLegend(mapSvg, radiusScale);
             }
 
+            tooltip = d3.select(containerId)
+              .append("div")
+                .attr("class", "map-tooltip")
+                .style("opacity", 0);
+
             onZoom();
             map.updateChart(data);
         });
     };
+
+    function tipMouseover(d) {
+        d3.select(this).classed("data-hover", true);
+
+        // var color = colorScale(d.CR);
+        var long = -d.key[0];
+        var lat  = +d.key[1];
+        var html = "<span class='emph'>" + d.value + "</span> new listings<br/>" +
+                   "<span class='emph'>" + lat + "&deg; </span>N <span class='emph'>" + long + "&deg; </span>W";
+
+        tooltip.html(html)
+            .style("left", (d3.event.pageX + 5) + "px")
+            .style("top", (d3.event.pageY + 10) + "px")
+          .transition()
+            .duration(200)
+            .style("opacity", .9) // started as 0!
+    };
+
+    // tooltip mouseout event handler
+    function tipMouseout(d) {
+        d3.select(this).classed("data-hover", false);
+
+        tooltip.transition()
+            .duration(200)
+            .style("opacity", 0);
+    };
+
 
     function getLegend(svg, scale) {
         svg.append("g")
@@ -97,7 +128,6 @@ var MapChart = function(containerId) {
         };
 
         return legend.update();
-
     }
 
     map.updateChart = function(nextData) {
@@ -114,33 +144,25 @@ var MapChart = function(containerId) {
         var dataCircles = dataG.selectAll("circle.data")
             .data(nextData, dataKeyAccessor);
 
-        dataCircles // update existing points
-          .transition()
-            .duration(500)
-            .attr("fill", function(d) {
-                return colorAccessor ? colorScale(colorAccessor(d)) : defaultCircleColor;
-            })
-            .attr("r", function(d) {
-                var unscaled = radiusAccessor ? radiusScale(radiusAccessor(d)) : defaultRadius;
-                return constantRadius ? (unscaled / zoom.scale()) : unscaled;
-            });
-
         dataCircles.enter().append("circle") // new entering points
             .attr("class", "data")
-            .attr("fill", function(d) {
-                return colorAccessor ? colorScale(colorAccessor(d)) : defaultCircleColor;
-            })
-            .attr("opacity", circleOpacity)
             .attr("r",  0)
             .attr("cx", function(d) {
                 return dataProjection(locationAccessor(d))[0];
             })
             .attr("cy", function(d) {
                 return dataProjection(locationAccessor(d))[1];
-            })
+            });
+
+        dataCircles // update existing points
+            .on("mouseover", tipMouseover)
+            .on("mouseout", tipMouseout)
           .transition()
             .duration(500)
-            .attr("r",  function(d) {
+            .attr("fill", function(d) {
+                return colorAccessor ? colorScale(colorAccessor(d)) : defaultCircleColor;
+            })
+            .attr("r", function(d) {
                 var unscaled = radiusAccessor ? radiusScale(radiusAccessor(d)) : defaultRadius;
                 return constantRadius ? (unscaled / zoom.scale()) : unscaled;
             });

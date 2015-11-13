@@ -39,7 +39,8 @@ path.confidence-area  { /* confidence intervals */
 
 path.linechart-line  { /* lines */
     fill: none;
-    stroke-width: 1.5px;
+    stroke-width: 0.8px;
+    shape-rendering: initial;
 }
 
 .dot { /* ponts on lines */

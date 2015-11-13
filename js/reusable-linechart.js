@@ -41,7 +41,7 @@ var fancyLineChart= function(container) {
     var height = 500 - margin.top  - margin.bottom;
     var focusStrokeWidth = 3;
     var focusOpacity     = 0.25;
-    var lineInterpolator = "linear"; // any valid d3 interpolator, e.g., "cardinal" or null or "step-before"
+    var lineInterpolator = "cardinal"; // any valid d3 interpolator, e.g., "cardinal" or null or "step-before"
     var areaInterpolator = lineInterpolator;
 
     // Accessor functions
@@ -82,7 +82,7 @@ var fancyLineChart= function(container) {
         textAnchor: "middle",
         title: "",
         formatter: undefined,
-        margin: 5
+        margin: 0
     };
 
     var axisY = {
@@ -95,7 +95,7 @@ var fancyLineChart= function(container) {
         title: "",
         formatter: undefined,
         limits: { min: undefined, max: undefined, symmetric: false },
-        margin: 5
+        margin: 0
     };
 
     var axisY2 = {
@@ -108,7 +108,7 @@ var fancyLineChart= function(container) {
         title: "",
         formatter: undefined,
         limits: { min: undefined, max: undefined, symmetric: false },
-        margin: 5
+        margin: 0
     };
 
     var tooltip  = {

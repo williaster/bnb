@@ -9,48 +9,33 @@ var CalendarHeatmap = function(containerId) {
     var formatYear = d3.time.format("%Y");
     var formatDate = d3.time.format("%Y-%m-%d");
 
+    var tooltipFormat = d3.time.format("%a %b %d");
     var dateAccessor  = function(d) { return d.key; };
     var valueAccessor = function(d) { return +d.value };
 
-    // note scales are for the brush only
-    var brush = d3.svg.brush()
-        .x(d3.scale.identity().domain([margin.left, width + 2]))
-        .y(d3.scale.identity().domain([height - (cellSize * 7) - 1, (2 * height) - (cellSize * 7) - 1]))
-        .on("brushend", onBrush);
-
-    function onBrush() {
-        var extent = d3.event.target.extent();
-        var weekLow  = Math.floor((extent[0][0] - margin.left) / cellSize);
-        var weekHigh = Math.ceil((extent[1][0] - margin.left) / cellSize);
-        var dayLow   = Math.floor((extent[0][1] - 20.5) / cellSize);
-        var dayHigh  = Math.ceil((Math.min(height, extent[1][1]) - 20.5) / cellSize);
-        // d3.select(this).transition()
-          // .call(brush.extent(extent1))
-          // .call(brush.event);
-    };
-
-    var dimension, group, legend;
+    var yearSvg, yearLabels, monthLabels, dowLabels, daysG, days, monthsG, months, legend, tooltip
+    var data, dataByDate, dimension, group;
 
     var calendar = {}; // returned object
 
     // @TODO check whether labels are defined
+    calendar.render = function() {
+
+    };
+
     calendar.render = calendar.redraw = function() {
         if (!dimension || !group) console.warn("no dimension or group to plot");
 
-        var data = group.top(Infinity);
+        data = group.top(Infinity);
 
-        var dataByDate = d3.nest()
-            .key(function(d) {
-                return formatDate(dateAccessor(d));
-            })
-            .rollup(function(d) {
-                return valueAccessor(d[0]);
-            })
+        dataByDate = d3.nest()
+            .key(function(d) { return formatDate(dateAccessor(d)); })
+            .rollup(function(d) { return valueAccessor(d[0]); })
             .map(data);
 
         var yearRange = d3.extent(data, function(d) { return +formatYear(dateAccessor(d)); });
 
-        if (yearRange[0] === yearRange[1]) {
+        if (yearRange[0] === yearRange[1]) { // at least one year
             yearRange[1]++;
         }
 
@@ -58,9 +43,9 @@ var CalendarHeatmap = function(containerId) {
             .range(colors)
             .domain(d3.extent(data, valueAccessor));
 
-        // Each year
-        var yearSvg = d3.select(containerId).selectAll("svg")
-            .data(d3.range(yearRange[0], yearRange[1]))
+        // Svg for each year
+        yearSvg = d3.select(containerId).selectAll("svg")
+            .data(d3.range(yearRange[0], yearRange[1]));
 
         yearSvg.exit().remove();
 
@@ -71,26 +56,47 @@ var CalendarHeatmap = function(containerId) {
           .append("g")
             .attr("transform", "translate(" + margin.left + "," + (height - cellSize * 7 - 1) + ")");
 
-        var yearLabel = yearSvg.select("g").append("text")
-            .attr("transform", "translate(-6," + (cellSize * 3.5) + ")rotate(-90)")
-            .style("text-anchor", "middle")
-            .text(function(d) { return d; })
-
-        var dowLabels = yearSvg.select("g")
-          .append("g")
-            .attr("class", "dow label")
-            .attr("transform", "translate(" + (width - 5) + ",0)")
-            .selectAll("dow")
-            .data(["M", "T", "W", "T", "F", "S", "S"])
-          .enter().append("text")
-            .attr("transform", function(d,i) { return "translate(0," + ((i + 1) * cellSize - 1) + ")"; })
-            .style("text-anchor", "middle")
-            .text(function(d) { return d; });
-
-        yearSvg.call(brush);
+        // all of the labels
+        if (!yearLabels) {
+            yearLabels = yearSvg.select("g")
+              .append("text")
+                .attr("transform", "translate(-6," + (cellSize * 3.5) + ")rotate(-90)")
+                .style("text-anchor", "middle")
+                .text(function(d) { return d; });
+        }
+        if (!dowLabels) {
+            dowLabels = yearSvg.select("g")
+              .append("g")
+                .attr("class", "dow-label")
+                .attr("transform", "translate(" + (width - 5) + ",0)")
+                .selectAll("dow")
+                .data(["M", "T", "W", "T", "F", "S", "S"])
+              .enter().append("text")
+                .attr("transform", function(d,i) { return "translate(0," + ((i + 1) * cellSize - 1) + ")"; })
+                .style("text-anchor", "middle")
+                .text(function(d) { return d; });
+        }
+        if (!monthLabels) {
+            monthLabels = yearSvg.select("g")
+              .append("g")
+                .attr("class", "month-label")
+                .selectAll("text")
+                .data(["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"])
+              .enter().append("text")
+                // this isn't a perfect translate...
+                .attr("transform", function(d,i) { return "translate(" + (4.21 * (i + 0.5) * (width/52)) + ",-6)"; })
+                .style("text-anchor", "middle")
+                .text(function(d) { return d; });
+        }
 
         // Each day
-        var days = yearSvg.select("g").selectAll(".day")
+        if (!daysG) {
+            daysG = yearSvg.select("g")
+              .append("g")
+                .attr("class", "day");
+        }
+
+        days = daysG.selectAll("rect")
             .data(function(d) { // all days for this year;
                 return d3.time.days(new Date(d, 0, 1), new Date(d + 1, 0, 1)); // new Date(y, m, d)
             });
@@ -99,45 +105,60 @@ var CalendarHeatmap = function(containerId) {
 
         days.enter().append("rect");
 
-        days.attr("class", "day")
-            .attr("width",  cellSize)
+        days.attr("width",  cellSize)
             .attr("height", cellSize)
             .attr("x", function(d) { return d3.time.weekOfYear(d) * cellSize; })
             .attr("y", function(d) { return d.getDay() * cellSize; })
             .style("fill", "#fff")
-            .datum(formatDate);
+            .datum(function(d) { return { date: d, string: formatDate(d) }; } );
 
-        days.filter(function(d) {
-                return d in dataByDate;
+        days.filter(function(d) { return d.string in dataByDate; })
+            .style("fill", function(d) { return colorScale(dataByDate[d.string]); })
+            .on("mouseover", function(d) {
+                d3.select(this)
+                    .attr("stroke-width", "2px")
+                    .style("stroke", "#333");
+
+                tooltip
+                    .style("opacity", 1)
+                    .style("left", (d3.event.offsetX - 30) + "px")
+                    .style("top", (d3.event.offsetY - 1.8*cellSize) + "px")
+                    .html(tooltipFormat(d.date) + "<br/>value: " + dataByDate[d.string]);
             })
-            .style("fill", function(d) {
-                return colorScale(dataByDate[d]);
-            })
-            .on("mouseover", function(d) { console.log("d:", d, "count:", dataByDate[d]) });
+            .on("mouseout", function(d) {
+                tooltip.style("opacity", 0);
+
+                d3.select(this)
+                    .attr("stroke-width", "1px")
+                    .style("stroke", null);
+            });
 
         // Outline months
-        var months = yearSvg.select("g").selectAll(".month")
+        if (!monthsG) {
+            monthsG = yearSvg.select("g")
+              .append("g") // group in a g
+                .attr("class", "month");
+        }
+
+        months = monthsG.selectAll("path")
             .data(function(d) {  // all months for this year
                 return d3.time.months(new Date(d, 0, 1), new Date(d + 1, 0, 1)); // new Date(y, m, d)
             });
 
         months.exit().remove();
 
-        months.enter().append("path")
-            .attr("class", "month");
+        months.enter().append("path");
 
         months.attr("d", monthPath);
 
-        var monthLabels = yearSvg.select("g")
-          .append("g")
-            .attr("class", "month label")
-            .selectAll("text")
-            .data(["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"])
-          .enter().append("text")
-            .attr("transform", function(d,i) { return "translate(" + (4.21 * (i + 0.5) * (width/52)) + ",-6)"; })
-            .style("text-anchor", "middle")
-            .text(function(d) { return d; });
+        // tooltip last / on top
+        if (!tooltip) {
+            tooltip = d3.select(containerId).append("div")
+                .attr("class", "heatmap-tooltip")
+                .style("opacity", 0);
 
+            tooltip.append("text");
+        }
 
         return this;
     };

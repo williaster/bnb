@@ -9,85 +9,197 @@ svg {
 .ib {
     display: inline-block;
 }
-#vis {
-    width: 100%;
+
+.glyphicon {
+    font-size: 10px;
+    top: 0;
+}
+
+.vis {
+    width: auto;
+}
+.loading {
+    font-weight: 100;
+    font-size: 20px;
+    margin: 20px;
+}
+
+.summary-container {
+    margin: 10px 50px;
+    vertical-align: top;
+    width: 350px;
+}
+
+.vis-title,
+.date-summary,
+.listings-summary,
+.interactions-summary {
+    font-weight: 100;
+    cursor: initial;
+    right: 0;
+    text-align: right;
+}
+.vis-title {
+    margin-top: 5px;
+    font-weight: 200;
+    font-size: 18px;
+}
+.date-summary {
+    margin-bottom: 10px;
+    font-size: 14px;
+}
+.listings-summary,
+.interactions-summary {
+    font-size: 16px;
+    margin-bottom: 2px;
+}
+.listings-summary .emph {
+    color:  #0571b0;
+}
+.interactions-summary .emph {
+    color:  #d01c8b;
+}
+.summary-change {
+    color: #000;
+}
+.summary-change .emph {
+    font-weight: 200;
+    color: #000;
 }
 /* Timeline */
 #timeline {
     position: relative;
-    width: 619px;
+    /*width: 667px;*/
     margin: 0 auto;
 }
 
-.date-summary,
-.counts-summary {
-    cursor: none;
-    position: absolute;
-    font-size: 12px;
+.zoom {
     right: 0;
     text-align: right;
-    min-height: 22px;
+    font-size: 12px;
+    cursor: pointer;
 }
+.zoom:hover {
+    text-decoration: underline;
+}
+
 .emph {
     /*color: #d01c8b;*/
     font-weight: bold;
 }
 .y-label.listings-color {
-    fill: #4dac26;
+    fill: #0571b0;
 }
 .y-label.interactions-color {
     fill: #d01c8b;
 }
 svg.fancy-linechart {
-    margin-top: 20px;
-}
-.hero {
-    width: 100%;
-    margin-bottom: 10px;
+    /*margin-top: 25px;*/
 }
 
 .hero,
 .supply,
 .demand {
     padding: 10px;
+    margin: 0 10px;
+}
+.supply {
+    width: 40%;
+}
+.demand {
+    width: 55%;
+}
+.hero {
+    width: 100%;
+    margin: 0 auto;
 }
 
 .supply,
 .demand {
     background-color: #fafafa;
     vertical-align: top;
-    width: 650px;
+    /*width: 650px;*/
     display: inline-block;
     overflow: hidden;
+    height: 100%;
 }
 .chart-label {
     font-size: 16px;
-    font-weight: bold;
+    font-weight: 100;
     text-rendering: optimizeLegibility;
     letter-spacing: 0.75px;
     margin: 5px 0 3px 0;
+    text-align: center;
+    margin: 2px;
 }
+.supply-header,
+.demand-header {
+    font-size: 16px;
+    font-weight: 200;
+}
+.demand {
+    /*color: #d01c8b;*/
+    border: 1px solid #d01c8b;
+}
+.supply {
+    /*color: #0571b0;*/
+    border: 1px solid #0571b0;
+}
+
+#path-analysis,
+#calendar-container,
+.dimensions {
+    width: 85%;
+    margin: 0 auto;
+}
+
+/* map */
 #map-container {
-    /*margin-top: 10px;*/
+    margin-top: 10px;
 }
 .map {
     border: 1px solid #ddd;
     cursor: all-scroll;
 }
-
+.map-tooltip {
+    pointer-events: none;
+    position: absolute;
+    background: #ddd;
+    padding: 3px;
+    font-size: 10px;
+    font-weight: 200;
+    text-align: center;
+}
+circle.data {
+    opacity: 0.4;
+    cursor: default;
+    stroke: none;
+}
+circle.data-hover {
+    opacity: 0.7;
+    stroke: #fff;
+    stroke-width: 2px;
+}
 
 /* dc.js charts */
 .row rect {
     cursor: pointer;
 }
 
-.row rect,
-.row .selected,
-.bar {
+.demand .row rect,
+.demand .row .selected,
+.demand .bar {
     fill: #d01c8b;
 }
-.row .deselected,
-.bar.deselected {
+.supply .row rect,
+.supply .row .selected,
+.supply .bar {
+    fill: #0571b0;
+}
+.supply .row .deselected,
+.demand .row .deselected,
+.supply .bar.deselected,
+.demand .bar.deselected {
     fill: #ddd;
 }
 .tick .grid-line {
@@ -99,52 +211,58 @@ svg.fancy-linechart {
     stroke: none;
 }
 
-
-
 /* calendar */
-.day {
+#calendar-container {
+    margin-bottom: 10px;
+}
+.day rect {
   fill: #fff;
   stroke: #ccc;
 }
 
-.month {
+.month path {
   fill: none;
   stroke: #000;
   stroke-width: 1.5px;
 }
 
-.month.label,
-.dow.label {
-  /*fill: none;*/
-  font-weight: 100;
+.month-label,
+.dow-label {
+  font-weight: 200;
 }
-
-/* map */
-circle.data {
-    stroke: none;
-}
-
-
-
-.tooltip {
-    position: absolute;
-    font-size: 12px;
-    width:  auto;
-    height: auto;
+.heatmap-tooltip {
     pointer-events: none;
-    background-color: white;
+    position: absolute;
+    background: #ddd;
+    padding: 3px;
+    font-size: 10px;
+    font-weight: 200;
+    text-align: center;
 }
 
-.circle-hover {
-    stroke: rgb(222,235,247);
-    stroke-width: 1px;
+/* sankey */
+.node rect {
+    cursor: move;
+    fill-opacity: .9;
+    shape-rendering: crispEdges;
 }
 
-.area {
-    fill: #d01c8b;
-    fill-opacity: 0.6;
+.node text {
+    font-weight: 600;
+    pointer-events: none;
+    text-shadow: 0 1px 0 #fff;
 }
 
+.link {
+    fill: none;
+    stroke: #000;
+    stroke-opacity: .2;
+}
+.link:hover {
+  stroke-opacity: .5;
+}
+
+/* timeline */
 .axis path,
 .axis line {
     fill: none;
