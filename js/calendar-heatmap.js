@@ -121,8 +121,8 @@ var CalendarHeatmap = function(containerId) {
 
                 tooltip
                     .style("opacity", 1)
-                    .style("left", (d3.event.offsetX - 30) + "px")
-                    .style("top", (d3.event.offsetY - 1.8*cellSize) + "px")
+                    .style("left", (d3.event.pageX - 30) + "px")
+                    .style("top", (d3.event.pageY - 3.5*cellSize) + "px")
                     .html(tooltipFormat(d.date) + "<br/>value: " + dataByDate[d.string]);
             })
             .on("mouseout", function(d) {

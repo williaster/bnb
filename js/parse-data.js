@@ -15,14 +15,18 @@ function mungeData(listingsData, interactionsData) {
 
     var instantlyBookable   = _getInstantlyBookableListingsLookup(listingsData);
     var dataForPathAnalysis = _parseDataForPathAnalysis(interactionsData, instantlyBookable);
+    var filterPathAnalysisByDateRange = function(extent) {
+        return _parseDataForPathAnalysis(interactionsData, instantlyBookable, extent);
+    };
 
     return {
         listingsRaw:     listingsData,
         interactionsRaw: interactionsData,
         listings: listings,
         interactions: interactions,
-        paths: dataForPathAnalysis
-    }; //, filterPathAnalysisByDateRange };
+        paths: dataForPathAnalysis,
+        filterPathAnalysisByDateRange
+    };
 };
 
 function _getInstantlyBookableListingsLookup(listingsData) {
@@ -36,8 +40,7 @@ function _getInstantlyBookableListingsLookup(listingsData) {
     return ids;
 };
 
-// color by who is doing something?
-function _parseDataForPathAnalysis(interactions, instantlyBookableLookup) {
+function _parseDataForPathAnalysis(interactions, instantlyBookableLookup, extent) {
     function makeLinks(sourceToTargetToValues, valueKey) {
         valueKey = valueKey || "count";
 
@@ -101,6 +104,13 @@ function _parseDataForPathAnalysis(interactions, instantlyBookableLookup) {
         currInteraction = interactions[i];
 
         parsedFirstInteractionTime        = yearMonthDayHourMinuteSecond(currInteraction.first_interaction_time_utc || "");
+
+        if (extent) {
+            if (!parsedFirstInteractionTime || parsedFirstInteractionTime < extent[0] || parsedFirstInteractionTime > extent[1]) {
+                continue;
+            }
+        }
+
         parsedHostRepliedTime             = yearMonthDayHourMinuteSecond(currInteraction.first_reply_time_utc || "")
         parsedBookingRequestSubmittedTime = yearMonthDayHourMinuteSecond(currInteraction.booking_request_submitted_time_utc || "");
         parsedHostAcceptedTime            = yearMonthDayHourMinuteSecond(currInteraction.host_accepted_time_utc || "");
@@ -200,14 +210,6 @@ function _parseDataForPathAnalysis(interactions, instantlyBookableLookup) {
     };
 };
 
-function filterPathAnalysisByDateRange(allNodes, allLinks, extent) {
-    var nodeIdsToFilter = {};
-    var nodes = [];
-    var links = [];
-
-    return { nodes, links };
-};
-
 function _parseListings(rawData) {
     console.log("listings sample", rawData[0])
     var listings = {};
@@ -226,7 +228,7 @@ function _parseListings(rawData) {
 
     var groups = listings.groups = {
         dateCreated: dims.dateCreated.group(),
-        location:    dims.location.group(),
+        location:    dims.location.group(), // @TODO get total value
         capacity:    dims.capacity.group(),
         type:        dims.type.group(),
         instantBookable: dims.instantBookable.group()
@@ -259,9 +261,6 @@ function _parseInteractions(rawData) {
             var num = +d.guests;
             return isNaN(num) ? 1 : num;
         }),
-        // originCountry: cf.dimension(function(d) {
-        //     return d.guest_origin_country;
-        // }),
         timeToReply: cf.dimension(function(d) {
             var firstInteraction = yearMonthDayHourMinuteSecond(d.first_interaction_time_utc);
             var firstReply       = yearMonthDayHourMinuteSecond(d.first_reply_time_utc);
@@ -293,7 +292,6 @@ function _parseInteractions(rawData) {
         firstInteraction: dims.firstInteraction.group(),
         nights: dims.nights.group(),
         guests: dims.guests.group(),
-        // originCountry: dims.originCountry.group(),
         timeToReply: dims.timeToReply.group()
         // success: dims.success.group().reduce(reduceAddAvg, reduceRemoveAvg, reduceInitAvg, "")
     };

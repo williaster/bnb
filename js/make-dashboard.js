@@ -230,7 +230,11 @@ function makeTimeline(parsedData) {
         listingsSummary.html(getListingsSummary(parsedData, extent, brush.empty()));
         interactionsSummary.html(getInteractionsSummary(parsedData, extent, brush.empty()));
 
-        // listingCount.text(getListingsCount(listings, extent))
+        // path analysis
+        pathSankey.update(
+            parsedData.filterPathAnalysisByDateRange(brush.extent())
+        );
+
         redrawAll(listings);
 
         // Update status of zoom button
@@ -380,7 +384,7 @@ function makeTimeline(parsedData) {
 };
 
 function redrawAll(listings) {
-map.updatePoints( listings.groups.location.top(Infinity) );
-calendar.redraw();
-dc.redrawAll();
+    map.updatePoints( listings.groups.location.top(Infinity) );
+    calendar.redraw();
+    dc.redrawAll();
 };
