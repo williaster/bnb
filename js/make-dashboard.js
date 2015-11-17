@@ -9,9 +9,9 @@ var overrideTimeDomain = [new Date("1/1/2013"), new Date("1/1/2015")];
 var initialTimerange   = [new Date("12/1/2014"), new Date("1/1/2015")];
 var supplyToggle, demandToggle,
     // demand
-    map, byCapacity, byType, byInstant,
+    map, byCapacity, byType, byInstant, byBedBath,
     // supply
-    calendar, byNights, byGuests, timeToReply, pathSankey;
+    calendar, byNights, byGuests, timeToReply, timeToCheckin, pathSankey;
 
 function initVis() {
     // Fetch data
@@ -73,7 +73,7 @@ function makeVis(parsedData) {
         .centerBar(true)
         .round(function(v) { return dc.round.floor(v) + 0.5; })
         .alwaysUseRounding(true)
-        .on("filtered", function() { map.updatePoints( listings.groups.location.top(Infinity) ); })
+
         .yAxisLabel('# New listings')
 
     byCapacity.yAxis().ticks(5)
@@ -85,7 +85,7 @@ function makeVis(parsedData) {
         .dimension(listings.dims.type)
         .group(listings.groups.type)
         .elasticX(true)
-        .on("filtered", function() { map.updatePoints( listings.groups.location.top(Infinity) ); })
+        .on("filtered", function() { redrawDemand(parsedData); })
         .xAxis().ticks(3);
 
 
@@ -96,8 +96,27 @@ function makeVis(parsedData) {
         .dimension(listings.dims.instantBookable)
         .group(listings.groups.instantBookable)
         .elasticX(true)
-        .on("filtered", function() { map.updatePoints( listings.groups.location.top(Infinity) ); })
-        .xAxis().ticks(2)
+        .on("filtered", function() { redrawDemand(parsedData); })
+        .xAxis().ticks(2);
+
+    byBedBath = dc.barChart("#beds-and-baths")
+        .width(155)
+        .height(heightSupplyCharts - 30)
+        .margins({top: 10, right: 15, bottom: 20, left: 30})
+        .x(d3.scale.linear().domain([-1,10]))
+        .elasticY(true)
+        .gap(1)
+        .centerBar(true)
+        .round(function(v) { return dc.round.floor(v) + 0.5; })
+        .alwaysUseRounding(true)
+        .yAxisLabel("# New listings")
+        .dimension(listings.dims.bedrooms)
+        .group(listings.groups.bedrooms)
+        .on("filtered", function() { redrawDemand(parsedData); })
+              // .stack(listings.groups.bathrooms);
+
+    byBedBath.yAxis().ticks(3);
+    byBedBath.xAxis().ticks(4);
 
     // Demand side --------------------------------------------------
     calendar = CalendarHeatmap("#calendar-container")
@@ -106,9 +125,8 @@ function makeVis(parsedData) {
 
     calendar.redraw();
 
-
     byNights = dc.barChart("#number-of-nights")
-        .width(110)
+        .width(130)
         .height(heightDemandCharts - 30)
         .margins({top: 10, right: 10, bottom: 20, left: 50})
         .dimension(interactions.dims.nights)
@@ -122,14 +140,13 @@ function makeVis(parsedData) {
         .round(function(v) { return dc.round.floor(v) + 0.5; })
         .alwaysUseRounding(true)
         .yAxisLabel('# Interactions')
-        .on("filtered", function() { calendar.redraw(); });
+        .on("filtered", function() { redrawSupply(parsedData); })
 
     byNights.xAxis().ticks(3)
     byNights.yAxis().ticks(4)
 
-
     byGuests = dc.barChart("#number-of-guests")
-        .width(180)
+        .width(150)
         .height(heightDemandCharts - 30)
         .margins({top: 10, right: 10, bottom: 20, left: 40})
         .dimension(interactions.dims.guests)
@@ -143,7 +160,7 @@ function makeVis(parsedData) {
         .round(function(v) { return dc.round.floor(v) + 0.5; })
         .alwaysUseRounding(true)
         .yAxisLabel('# Interactions')
-        .on("filtered", function() { calendar.redraw(); });
+        .on("filtered", function() { redrawSupply(parsedData); });
 
     byGuests.xAxis().ticks(5);
     byGuests.yAxis().ticks(4);
@@ -156,13 +173,35 @@ function makeVis(parsedData) {
         .group(interactions.groups.timeToReply)
         .elasticX(true)
         .data(function(group) { return group.top(5); })
-        .on("filtered", function() { calendar.redraw(); })
+        .on("filtered", function() { redrawSupply(parsedData); })
         .xAxis().ticks(5)
+
+    timeToCheckin = dc.barChart("#time-to-checkin")
+    timeToCheckin.width(250)
+        .height(heightDemandCharts - 30)
+        .margins({top: 10, right: 10, bottom: 20, left: 40})
+        .dimension(interactions.dims.daysInAdvanceRequested)
+        .group(interactions.groups.daysInAdvanceRequested)
+        .x( d3.scale
+              .linear()
+              .domain([-1, 35]) )
+        .elasticY(true)
+        // .elasticX(true)
+        .gap(1)
+        .centerBar(true)
+        .round(function(v) { return dc.round.floor(v) + 0.5; })
+        .alwaysUseRounding(true)
+        .yAxisLabel('# Interactions')
+        .on("filtered", function() { redrawSupply(parsedData, false, true); });
+
+    timeToCheckin.xAxis().ticks(5);
+    timeToCheckin.yAxis().ticks(4);
+
 
     dc.renderAll();
 
     map = MapChart("#map-container")
-        .width(550)
+        .width(500)
         .height(330)
         .key(function(d) { return d.key; })
         .location(function(d) { return d.key; })
@@ -172,7 +211,7 @@ function makeVis(parsedData) {
         .datum(listings.groups.location.top(Infinity))
         .call(map);
 
-    //
+    // Path analysis
     pathSankey = SankeyPath("#path-analysis")
         .width(800)
         .height(150)
@@ -402,9 +441,39 @@ function makeTimeline(parsedData) {
 };
 
 function redrawAll(parsedData) {
+    redrawDemand(parsedData, false);
+    redrawSupply(parsedData, false);
+    dc.redrawAll();
+};
+
+function redrawDemand(parsedData, updateDc) {
     map.updatePoints(
         parsedData.listings.groups.location.top(Infinity)
     );
+    if (updateDc) {
+        dc.redrawAll();
+    }
+};
+
+
+function redrawSupply(parsedData, updateDc, doNotUpdateCheckin) {
+    // Have to manually update the x axis ...
+    function getMaxTimeToCheckin() {
+        var top = parsedData.interactions.dims.daysInAdvanceRequested.top(3)[2]; // outliers
+        var firstInteraction = d3.time.day(parsedData.yearMonthDayHourMinuteSecond(top.first_interaction_time_utc));
+        var checkinDate      = parsedData.yearMonthDay(top.checkin_date);
+        return (checkinDate - firstInteraction) / (1000*60*60*24);
+    };
+    if (!doNotUpdateCheckin) {
+        timeToCheckin
+            .x(d3.scale.linear()
+            .domain([-1, getMaxTimeToCheckin() + 1]));
+    }
+
+    timeToCheckin.redraw();
     calendar.redraw();
-    dc.redrawAll();
+
+    if (updateDc) {
+        dc.redrawAll();
+    }
 };

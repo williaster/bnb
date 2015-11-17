@@ -26,7 +26,9 @@ function mungeData(listingsData, interactionsData) {
         listings: listings,
         interactions: interactions,
         paths: dataForPathAnalysis,
-        filterPathAnalysisByDateRange
+        filterPathAnalysisByDateRange,
+        yearMonthDay,
+        yearMonthDayHourMinuteSecond
     };
 };
 
@@ -300,26 +302,22 @@ function _parseInteractions(rawData) {
                 return "NA";
             }
         }),
-        // daysInAdvanceRequested: cf.dimension(function(d) {
-        //     var firstInteraction = yearMonthDayHourMinuteSecond(d.first_interaction_time_utc);
-        //     var firstReply       = yearMonthDayHourMinuteSecond(d.first_reply_time_utc);
+        daysInAdvanceRequested: cf.dimension(function(d) {
+            var firstInteraction = d3.time.day(yearMonthDayHourMinuteSecond(d.first_interaction_time_utc));
+            var checkinDate      = yearMonthDay(d.checkin_date);
 
-        //     if (firstInteraction !== null &&
-        //         firstReply !== null) {
-        //         var nearestHour = Math.round((firstReply - firstInteraction) / hourInMs) * hourInMs;
-        //         var nHours = nearestHour / hourInMs;
+            if (firstInteraction !== null &&
+                checkinDate !== null) {
 
-        //         return nHours + "-" + (nHours + 1) + " hrs";
-        //         // var nearestDay = Math.round((firstReply - firstInteraction) / dayInMs) * dayInMs;
-        //         // var nDays = nearestDay / dayInMs;
+                // var nearestDay = Math.round((firstReply - firstInteraction) / hourInMs) * hourInMs;
+                var nDays = (checkinDate - firstInteraction) / dayInMs;
 
-        //         // return nDays + "-" + (nDays + 1) + " days";
-
-        //     }
-        //     else {
-        //         return "NA";
-        //     }
-        // }),
+                return nDays;
+            }
+            else {
+                return 0;
+            }
+        }),
         // requestsPerUserPerDate: cf.
 
         // requests perlisting, percheckin,
@@ -338,7 +336,8 @@ function _parseInteractions(rawData) {
         firstInteraction: dims.firstInteraction.group(),
         nights: dims.nights.group(),
         guests: dims.guests.group(),
-        timeToReply: dims.timeToReply.group()
+        timeToReply: dims.timeToReply.group(),
+        daysInAdvanceRequested: dims.daysInAdvanceRequested.group()
         // success: dims.success.group().reduce(reduceAddAvg, reduceRemoveAvg, reduceInitAvg, "")
     };
 

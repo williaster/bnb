@@ -154,15 +154,22 @@ svg {
 
 
 .supply > div {
-    width: 45%;
     margin: 10px auto;
     vertical-align: middle;
 }
+#map-container {
+    width: 40%;
+}
+.demand .dimensions {
+    width: 50%;
+}
+
 .demand > div {
     width: 50%;
     margin: 0 auto;
 }
-#path-analysis {
+#path-analysis,
+.demand .dimensions {
     width: 75%;
 }
 
@@ -196,6 +203,11 @@ circle.data-hover {
 /* dc.js charts */
 .row rect {
     cursor: pointer;
+}
+.row text {
+    pointer-events: none;
+    text-shadow: 0 2px 0 #fff;
+    font-size: 13px;
 }
 
 .demand .row rect,
