@@ -3,11 +3,13 @@ var listingsColor     = "#0571b0";
 var interactionsColor = "#d01c8b";
 var heightSupplyCharts = 150;
 var heightDemandCharts = 130;
+var commaFormat = d3.format(",");
 
 var overrideTimeDomain = [new Date("1/1/2013"), new Date("1/1/2015")];
 var initialTimerange   = [new Date("12/1/2014"), new Date("1/1/2015")];
+var supplyToggle, demandToggle,
     // demand
-var map, byCapacity, byType, byInstant,
+    map, byCapacity, byType, byInstant,
     // supply
     calendar, byNights, byGuests, timeToReply, pathSankey;
 
@@ -26,12 +28,35 @@ function initVis() {
         });
     });
 }
+function handleSupplyDemandToggle(clicked) {
+    var toToggle, toToggleButton, toTurnOff, toTurnOffButton;
+    if (clicked === "supply") {
+        toToggleButton  = d3.select(".listings-summary");
+        toTurnOffButton = d3.select(".interactions-summary");
+        toToggle  = d3.select(".supply");
+        toTurnOff = d3.select(".demand");
+    } else {
+        toTurnOffButton  = d3.select(".listings-summary");
+        toToggleButton   = d3.select(".interactions-summary")
+        toTurnOff  = d3.select(".supply");
+        toToggle = d3.select(".demand");
+    }
+    toToggleButton.classed("on", !toToggleButton.classed("on"));
+    toToggle.classed("off", !toToggle.classed("off"));
 
+    toTurnOffButton.classed("on", false);
+    toTurnOff.classed("off", true);
+};
 // renders all charts
 // @TODO just make list of charts to iteratea over + define update function (so can remove global vars using closure)
 function makeVis(parsedData) {
     var listings     = parsedData.listings;
     var interactions = parsedData.interactions;
+
+    supplyToggle = d3.select(".listings-summary")
+        .on("click", function() { handleSupplyDemandToggle("supply"); });
+    demandToggle = d3.select(".interactions-summary")
+        .on("click", function() { handleSupplyDemandToggle("demand"); });
 
     // Supply side
     byCapacity = dc.barChart("#people-capacity")
@@ -50,6 +75,8 @@ function makeVis(parsedData) {
         .alwaysUseRounding(true)
         .on("filtered", function() { map.updatePoints( listings.groups.location.top(Infinity) ); })
         .yAxisLabel('# New listings')
+
+    byCapacity.yAxis().ticks(5)
 
     byType = dc.rowChart("#listing-type")
         .width(150)
@@ -81,23 +108,23 @@ function makeVis(parsedData) {
 
 
     byNights = dc.barChart("#number-of-nights")
-        .width(180)
+        .width(110)
         .height(heightDemandCharts - 30)
         .margins({top: 10, right: 10, bottom: 20, left: 50})
         .dimension(interactions.dims.nights)
         .group(interactions.groups.nights)
         .x( d3.scale
               .linear()
-              .domain([0, 20]) )
+              .domain([0, 10]) )
         .elasticY(true)
-        .gap(1)
+        .gap(0)
         .centerBar(true)
         .round(function(v) { return dc.round.floor(v) + 0.5; })
         .alwaysUseRounding(true)
         .yAxisLabel('# Interactions')
         .on("filtered", function() { calendar.redraw(); });
 
-    byNights.xAxis().ticks(5)
+    byNights.xAxis().ticks(3)
     byNights.yAxis().ticks(4)
 
 
@@ -147,7 +174,7 @@ function makeVis(parsedData) {
 
     //
     pathSankey = SankeyPath("#path-analysis")
-        .width(500)
+        .width(800)
         .height(220)
         .fill(function(d) {
             return d.className === "host"  ? listingsColor :
@@ -178,8 +205,8 @@ function makeTimeline(parsedData) {
     var listingsSummary     = d3.select(".listings-summary");
     var interactionsSummary = d3.select(".interactions-summary");
 
-    // var countSummary = d3.select("#timeline .counts-summary");
     var zoomToggle = d3.select("#timeline .zoom")
+        .html("Zoom")
         .on("click", zoomOrResetTimeline);
 
     var timeline = fancyLineChart('#timeline')
@@ -235,15 +262,15 @@ function makeTimeline(parsedData) {
             parsedData.filterPathAnalysisByDateRange(brush.extent())
         );
 
-        redrawAll(listings);
+        redrawAll(parsedData);
 
         // Update status of zoom button
         if (brush.empty()) {
-            zoomToggle.html("");
+            zoomToggle.style("visibility", "hidden");
             timeline.updateChart(data);
         }
         else {
-            zoomToggle.html("Zoom");
+            zoomToggle.style("visibility", null);
         }
     }
 
@@ -298,7 +325,7 @@ function makeTimeline(parsedData) {
             filteredData.push(Object.assign({}, group, { values }));
         });
 
-        zoomToggle.html("");
+        zoomToggle.style("visibility", "hidden");
         timeline.updateChart(filteredData);
     };
 
@@ -313,7 +340,7 @@ function makeTimeline(parsedData) {
 
     function getListingsSummary(parsedData, extent, isEmpty) {
         if (isEmpty) {
-            return "";
+            return "<div><span class='emph'>-</span> new listings</div>";
         }
         var monthInMs    = (1000*60*60*24*30);
         var offsetExtent = [new Date(extent[0] - monthInMs), new Date(extent[1] - monthInMs)];
@@ -333,21 +360,20 @@ function makeTimeline(parsedData) {
             }
         }
         percentChange = (count - countOffset) / countOffset * 100;
-        percentChange = isNaN(percentChange) ? "--" : Math.round(percentChange*100) / 100;
+        percentChange = isNaN(percentChange) ? "-" : Math.round(percentChange*100) / 100;
         var arrow = "<span class='glyphicon glyphicon-arrow-" +
                     (percentChange > 0 ? "up" : "down") + "'></span>";
 
-        return "<span class='emph'>" + count + "</span> new listings " +
-               "<span class='summary-change'>(" +
-                    arrow + "<span class='emph'>" + Math.abs(percentChange) + "%</span> from " + countOffset +
-               ")</span>";
+        return "<div>" +
+                    "<span class='emph'>" + commaFormat(count) + "</span> new listings" +
+               "</div>" +
+               "<div class='summary-change'>" +
+                    arrow + "<span class='emph'>" + Math.abs(percentChange) + "%</span> from " + commaFormat(countOffset) +
+               "</div>";
     };
     function getInteractionsSummary(parsedData, extent, isEmpty) {
         if (isEmpty) {
-            return "";
-        }
-        if (isEmpty) {
-            return "";
+            return "<div><span class='emph'>-</span> interactions</div>";
         }
         var monthInMs    = (1000*60*60*24*30);
         var offsetExtent = [new Date(extent[0] - monthInMs), new Date(extent[1] - monthInMs)];
@@ -367,24 +393,24 @@ function makeTimeline(parsedData) {
             }
         }
         percentChange = (count - countOffset) / countOffset * 100;
-        percentChange = isNaN(percentChange) ? "--" : Math.round(percentChange*100) / 100;
+        percentChange = isNaN(percentChange) ? "-" : Math.round(percentChange*100) / 100;
         var arrow = "<span class='glyphicon glyphicon-arrow-" +
                     (percentChange > 0 ? "up" : "down") + "'></span>";
 
-        return "<span class='emph'>" + count + "</span> interactions " +
-               "<span class='summary-change'>(" +
-                    arrow + "<span class='emph'>" + Math.abs(percentChange) + "%</span> from " + countOffset +
-               ")</span>";
+        return "<div>" +
+                   "<span class='emph'>" + commaFormat(count) + "</span> interactions " +
+               "</div>" +
+               "<div class='summary-change'>" +
+                    arrow + "<span class='emph'>" + Math.abs(percentChange) + "%</span> from " + commaFormat(countOffset) +
+               "</div>";
     };
-
-    // function getListingsCount(listings, extent) {
-    //     return listings.dims.location.top(Infinity).length + " new listings";
-    // };
 
 };
 
-function redrawAll(listings) {
-    map.updatePoints( listings.groups.location.top(Infinity) );
+function redrawAll(parsedData) {
+    map.updatePoints(
+        parsedData.listings.groups.location.top(Infinity)
+    );
     calendar.redraw();
     dc.redrawAll();
 };

@@ -11,23 +11,32 @@ svg {
 }
 
 .glyphicon {
-    font-size: 10px;
-    top: 0;
+    font-size: 12px;
+    top: -1px;
+    margin-right: 2px;
 }
 
+#airbnb-dashboard {
+    width: 100%;
+}
 .vis {
     width: auto;
 }
 .loading {
     font-weight: 100;
-    font-size: 20px;
-    margin: 20px;
+    font-size: 22px;
+    text-align: center;
+    width: 100%;
+    margin-top: 100px;
+    padding: 50px 0;
+    background: #f4f4f4;
 }
 
 .summary-container {
-    margin: 10px 50px;
+    /*padding: 10px 50px;*/
     vertical-align: top;
-    width: 350px;
+    /*width: 350px;*/
+    background: #f4f4f4;
 }
 
 .vis-title,
@@ -36,8 +45,20 @@ svg {
 .interactions-summary {
     font-weight: 100;
     cursor: initial;
-    right: 0;
-    text-align: right;
+    text-align: left;
+}
+.listings-summary,
+.interactions-summary {
+    text-align: center;
+    vertical-align: middle;
+    font-size: 16px;
+    width: 240px;
+    cursor: pointer;
+    background: #f4f4f4;
+}
+.listings-summary > div,
+.interactions-summary > div {
+    font-size: 20px;
 }
 .vis-title {
     margin-top: 5px;
@@ -45,20 +66,20 @@ svg {
     font-size: 18px;
 }
 .date-summary {
-    margin-bottom: 10px;
     font-size: 14px;
-}
-.listings-summary,
-.interactions-summary {
-    font-size: 16px;
-    margin-bottom: 2px;
 }
 .listings-summary .emph {
     color:  #0571b0;
 }
+.listings-summary.on,
+.interactions-summary.on {
+     background: #ccc;
+}
+
 .interactions-summary .emph {
     color:  #d01c8b;
 }
+
 .summary-change {
     color: #000;
 }
@@ -66,16 +87,21 @@ svg {
     font-weight: 200;
     color: #000;
 }
-/* Timeline */
-#timeline {
-    position: relative;
-    /*width: 667px;*/
-    margin: 0 auto;
+
+.supply,
+.demand,
+.hero > div {
+    display: table-cell;
+    border: 5px solid #fff;
+    padding: 0 10px;
+}
+.hero > div {
+    height: 185px;
 }
 
 .zoom {
-    right: 0;
     text-align: right;
+    margin-right: 50px;
     font-size: 12px;
     cursor: pointer;
 }
@@ -84,7 +110,6 @@ svg {
 }
 
 .emph {
-    /*color: #d01c8b;*/
     font-weight: bold;
 }
 .y-label.listings-color {
@@ -93,69 +118,56 @@ svg {
 .y-label.interactions-color {
     fill: #d01c8b;
 }
-svg.fancy-linechart {
-    /*margin-top: 25px;*/
-}
 
 .hero,
-.supply,
-.demand {
-    padding: 10px;
+.data-container {
+    width: 1300px;
     margin: 0 10px;
-}
-.supply {
-    width: 40%;
-}
-.demand {
-    width: 50%;
-}
-.hero {
-    width: 100%;
-    margin: 0 auto;
 }
 
 .supply,
 .demand {
-    background-color: #fafafa;
-    vertical-align: top;
-    /*width: 650px;*/
-    display: inline-block;
-    overflow: hidden;
-    height: 100%;
+    background: #f4f4f4;
+    margin: 0 auto;
+    width: 1300px;
+    height: 510px;
+}
+.supply.off,
+.demand.off {
+    display: none;
 }
 .chart-label {
-    font-size: 16px;
+    font-size: 20px;
     font-weight: 100;
     text-rendering: optimizeLegibility;
     letter-spacing: 0.75px;
     margin: 5px 0 3px 0;
     text-align: center;
     margin: 2px;
+    text-shadow: 0 1px 0 #fff;
 }
 .supply-header,
 .demand-header {
     font-size: 16px;
     font-weight: 200;
 }
-.demand {
-    /*color: #d01c8b;*/
-    border: 1px solid #d01c8b;
-}
-.supply {
-    /*color: #0571b0;*/
-    border: 1px solid #0571b0;
-}
 
-#path-analysis,
-#calendar-container,
-.dimensions {
-    width: 85%;
-    margin: 0 auto;
+
+.supply > div {
+    width: 45%;
+    margin: 10px auto;
+    vertical-align: middle;
+}
+.demand > div {
+    width: 50%;
+    margin: 10px auto;
+}
+#path-analysis {
+    width: 75%;
 }
 
 /* map */
 #map-container {
-    margin-top: 10px;
 }
 .map {
     border: 1px solid #ddd;
@@ -260,6 +272,16 @@ circle.data-hover {
 }
 .link:hover {
   stroke-opacity: .5;
+}
+.sankey-tooltip {
+    position: absolute;
+    width: auto;
+    position: absolute;
+    background: #ddd;
+    padding: 3px;
+    font-size: 10px;
+    font-weight: 200;
+    text-align: center;
 }
 
 /* timeline */

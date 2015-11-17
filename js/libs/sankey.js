@@ -252,8 +252,9 @@ d3.sankey = function() {
     }
 
     function ascendingDepth(a, b) {
-      // return b.y - a.y;
-      return a.y - b.y; // original code
+      return b.y - a.y;
+      // return a.y - b.y; // original code
+      // return b.dy - a.dy
     }
   }
 
@@ -287,7 +288,9 @@ d3.sankey = function() {
     // The is the original / library code
     // return node.y + node.dy / 2;
     // This aligns nodes along the top of their levels
-    return node.y + node.dy;
+    // return node.y + node.dy;
+    return node.y;
+    // return 0;
   }
 
   function value(link) {

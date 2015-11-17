@@ -16,11 +16,16 @@ function SankeyPath(containerId) {
                 .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
             sankey = d3.sankey()
-                .nodeWidth(35)
-                .nodePadding(10)
+                .nodeWidth(25)
+                .nodePadding(15)
                 .size([width, height]);
 
             path = sankey.link();
+
+            tooltip = d3.select(containerId)
+              .append("div")
+                .attr("class", "sankey-tooltip")
+                .style("opacity", 0);
 
             chart.update(data);
         });
@@ -30,7 +35,7 @@ function SankeyPath(containerId) {
         sankey
             .nodes(data.nodes)
             .links(data.links)
-            .layout(32);
+            .layout(50);
 
         if (!linksG) {
             linksG = svg.append("g");
@@ -62,18 +67,17 @@ function SankeyPath(containerId) {
             .attr("class", function(d) { return "node " + (d.className || ""); });
 
         temp.append("rect")
-            // .attr("height", function(d) { return d.dy; })
             .attr("width", sankey.nodeWidth())
-            // .style("fill", fillAccessor)
-            .style("stroke", "none");
+            .style("stroke", "none")
+            .on("mouseover", onmouseover)
+            .on("mouseout",  onmouseout)
+            .on("mouseup", onmouseover);
 
         temp.append("text")
             .attr("x", -6)
-            // .attr("y", function(d) { return d.dy / 2; })
             .attr("dy", ".35em")
             .attr("text-anchor", "end")
             .attr("transform", null)
-            // //.filter(function(d) { return d.x < width / 2; })
             .attr("x", 6 + sankey.nodeWidth())
             .attr("text-anchor", "start");
 
@@ -84,14 +88,32 @@ function SankeyPath(containerId) {
             });
 
         nodes.select("rect")
+            .style("fill", fillAccessor)
             .transition().duration(200)
-            .attr("height", function(d) { return d.dy; })
-            .style("fill", fillAccessor);
+            .attr("height", function(d) { return d.dy; });
 
         nodes.select("text")
-            .transition().duration(200)
-            .text(function(d) { return d.value ? d.name : ""; })
+            .attr("class", "name")
             .attr("y", function(d) { return d.dy / 2; })
+            .text(function(d) {
+                return d.value ? d.name : ""
+            })
+
+        // nodes.select("text")
+        //   .append("tspan")
+        //     .attr("class", "value")
+        //     .attr("y", function(d) { return d.dy / 2; })
+        //     .text(function(d) {
+        //         return d.value ? (d.value + " (" + d.percentage + ")") : ""
+        //     });
+
+            //     }
+            //     var name = d.name;
+            //     var n    = d.value + " (" + d.percentage + ")";
+            //     return "<tspan class='name'>" + name + "</tspan>" +
+            //            "<tspan class='value'>" + n + "</tspan>";
+            // })
+            // .attr("y", function(d) { return d.dy / 2; })
 
         nodes.call(
             d3.behavior.drag()
@@ -108,7 +130,30 @@ function SankeyPath(containerId) {
 
             sankey.relayout();
             links.attr("d", path);
-        }
+        };
+        function onmouseover(d) {
+            tooltip
+                .html(getTooltipHtml)
+              .transition()
+                .delay(300)
+                .duration(200)
+                .style("left", (d3.event.pageX + 10)  + "px")
+                .style("top",  (d3.event.pageY + 10) + "px")
+                .style("opacity", 0.95);
+
+        };
+        function onmouseout(d) {
+            tooltip.transition()
+                .duration(100)
+                .style("opacity", 0);
+        };
+        function getTooltipHtml(d) {
+            var name = d.name;
+            var n    = d.value + " (" + d.percentage + ")";
+
+            return "<div class='name'>" + name + "</div>" +
+                   "<div class='value'>" + n + "</div>";
+        };
     }
 
     // getter / setters

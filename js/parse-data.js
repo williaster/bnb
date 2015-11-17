@@ -7,6 +7,7 @@ var monthDayYear = d3.time.format("%m/%d/%y").parse;
 var yearMonthDay = d3.time.format("%Y-%m-%d").parse;
 var yearMonthDayHourMinuteSecond = d3.time.format("%Y-%m-%d %H:%M:%S.%L").parse;
 var hourInMs = 1000 * 60 * 60;
+var halfDayInMs  = hourInMs * 12;
 var dayInMs  = hourInMs * 24;
 
 function mungeData(listingsData, interactionsData) {
@@ -40,8 +41,11 @@ function _getInstantlyBookableListingsLookup(listingsData) {
     return ids;
 };
 
+// extent is optional, will filter by date
 function _parseDataForPathAnalysis(interactions, instantlyBookableLookup, extent) {
     function makeLinks(sourceToTargetToValues, valueKey) {
+        var nInteractions = interactions.length;
+        var contacted = 0, requested = 0, successful = 0, unsuccessful = 0;
         valueKey = valueKey || "count";
 
         var links = [];
@@ -51,13 +55,20 @@ function _parseDataForPathAnalysis(interactions, instantlyBookableLookup, extent
                 currLink = sourceToTargetToValues[source][target];
 
                 links.push({
-                    source: +nameToIdLookup[source],
-                    target: +nameToIdLookup[target],
-                    value:  currLink[valueKey]
+                    source:  +nameToIdLookup[source],
+                    target:  +nameToIdLookup[target],
+                    value:   currLink[valueKey],
+                    percent: Math.round(currLink[valueKey] * nInteractions * 10) / 10
                 });
-                console.log(source, "->", target, currLink[valueKey]);
+                if (source === 'Guest contacted host') contacted+=currLink[valueKey];
+                if (source === 'Guest requested booking') requested+=currLink[valueKey];
+                if (target === 'Successful booking') successful+=currLink[valueKey];
+                if (target === 'Un-successful booking') unsuccessful+=currLink[valueKey];
             }
         }
+        console.log("contacted, requested, sum", contacted, requested, (contacted + requested));
+        console.log("successful, unsuccessful, sum", successful, unsuccessful, (successful + unsuccessful));
+
         return links;
     };
     var idToNameLookup = {
@@ -100,34 +111,40 @@ function _parseDataForPathAnalysis(interactions, instantlyBookableLookup, extent
         firstInteractionWasBookingRequest, firstInteractionWasNotBookingRequest,
         hostNeverResponded, hostResponded, hostAccepted, hostRejected, guestRepliedAfterHostAccepted;
 
+    var total = 0;
     for (var i = 0, len = interactions.length; i < len; i++) {
         currInteraction = interactions[i];
 
         parsedFirstInteractionTime        = yearMonthDayHourMinuteSecond(currInteraction.first_interaction_time_utc || "");
+        parsedHostRepliedTime             = yearMonthDayHourMinuteSecond(currInteraction.first_reply_time_utc || "")
+        parsedBookingRequestSubmittedTime = yearMonthDayHourMinuteSecond(currInteraction.booking_request_submitted_time_utc || "");
+        parsedHostAcceptedTime            = yearMonthDayHourMinuteSecond(currInteraction.host_accepted_time_utc || "");
+        parsedBookingTime                 = yearMonthDayHourMinuteSecond(currInteraction.booking_time_utc || "");
 
         if (extent) {
             if (!parsedFirstInteractionTime || parsedFirstInteractionTime < extent[0] || parsedFirstInteractionTime > extent[1]) {
                 continue;
             }
         }
-
-        parsedHostRepliedTime             = yearMonthDayHourMinuteSecond(currInteraction.first_reply_time_utc || "")
-        parsedBookingRequestSubmittedTime = yearMonthDayHourMinuteSecond(currInteraction.booking_request_submitted_time_utc || "");
-        parsedHostAcceptedTime            = yearMonthDayHourMinuteSecond(currInteraction.host_accepted_time_utc || "");
-        parsedBookingTime                 = yearMonthDayHourMinuteSecond(currInteraction.booking_time_utc || "");
+        total++;
 
         isInstantlyBookable                  = instantlyBookableLookup[currInteraction.id_listing];
         hadFirstInteraction                  = !!parsedFirstInteractionTime;
         guestRequestedBooking                = !!parsedBookingRequestSubmittedTime;
-        wasBookedInstantly                   = isInstantlyBookable && hadFirstInteraction /*&& !parsedHostRepliedTime*/ && !parsedHostAcceptedTime;
-        firstInteractionWasBookingRequest    = !wasBookedInstantly && hadFirstInteraction && currInteraction.first_interaction_time_utc === currInteraction.booking_request_submitted_time_utc;
-        firstInteractionWasNotBookingRequest = !wasBookedInstantly && hadFirstInteraction &&
-                                              (!parsedBookingRequestSubmittedTime ||  parsedFirstInteractionTime < parsedBookingRequestSubmittedTime);
+        firstInteractionWasBookingRequest    = hadFirstInteraction && currInteraction.first_interaction_time_utc === currInteraction.booking_request_submitted_time_utc;
+        wasBookedInstantly                   = isInstantlyBookable && firstInteractionWasBookingRequest;
+        firstInteractionWasNotBookingRequest = !firstInteractionWasBookingRequest; //!parsedBookingRequestSubmittedTime ||  parsedFirstInteractionTime < parsedBookingRequestSubmittedTime;
         hostNeverResponded                   = !wasBookedInstantly && !parsedHostRepliedTime && !parsedHostAcceptedTime;
-        hostResponded                        = !!parsedHostRepliedTime || !!parsedHostAcceptedTime;
+        hostResponded                        = !wasBookedInstantly && !!parsedHostRepliedTime || !!parsedHostAcceptedTime;
         hostAccepted                         = !!parsedHostAcceptedTime;
-        hostRejected                         = guestRequestedBooking && !!parsedHostRepliedTime && !parsedHostAcceptedTime;
+        hostRejected                         = !wasBookedInstantly && guestRequestedBooking && !!parsedHostRepliedTime && !parsedHostAcceptedTime;
         guestRepliedAfterHostAccepted        = parsedHostAcceptedTime  && parsedBookingTime > parsedHostAcceptedTime;
+
+        if (wasBookedInstantly) {
+            currLink = linksData['Guest requested booking']['Successful booking'] =
+                      (linksData['Guest requested booking']['Successful booking'] || { count: 0, sumTimeBetween: 0 });
+            currLink.count++;
+        }
 
         if (firstInteractionWasNotBookingRequest && hostNeverResponded) {
             currLink = linksData['Guest contacted host']['Host did not reply'] =
@@ -151,16 +168,11 @@ function _parseDataForPathAnalysis(interactions, instantlyBookableLookup, extent
             }
         }
 
-        if (firstInteractionWasNotBookingRequest && hostResponded && parsedBookingRequestSubmittedTime &&
-            parsedFirstInteractionTime > parsedBookingRequestSubmittedTime) {
+        if (firstInteractionWasNotBookingRequest &&
+            parsedBookingRequestSubmittedTime &&
+            parsedFirstInteractionTime < parsedBookingRequestSubmittedTime) {
             currLink = linksData['Host replied']['Guest requested booking'] =
                       (linksData['Host replied']['Guest requested booking'] || { count: 0, sumTimeBetween: 0 });
-            currLink.count++;
-        }
-
-        if (wasBookedInstantly) {
-            currLink = linksData['Guest requested booking']['Successful booking'] =
-                      (linksData['Guest requested booking']['Successful booking'] || { count: 0, sumTimeBetween: 0 });
             currLink.count++;
         }
 
@@ -187,23 +199,23 @@ function _parseDataForPathAnalysis(interactions, instantlyBookableLookup, extent
                       (linksData['Guest requested booking']['Host accepted booking request'] || { count: 0, sumTimeBetween: 0 });
             currLink.count++;
 
-            if (!guestRepliedAfterHostAccepted) {
+            // if (!guestRepliedAfterHostAccepted) {
                 currLink = linksData['Host accepted booking request']['Successful booking'] =
                           (linksData['Host accepted booking request']['Successful booking'] || { count: 0, sumTimeBetween: 0 });
                 currLink.count++;
-            }
+            // }
         }
-        if (hostAccepted && guestRepliedAfterHostAccepted) {
-            currLink = linksData['Host accepted booking request']['Guest updated booking'] =
-                      (linksData['Host accepted booking request']['Guest updated booking'] || { count: 0, sumTimeBetween: 0 });
-            currLink.count++;
+        // if (hostAccepted && guestRepliedAfterHostAccepted) {
+        //     currLink = linksData['Host accepted booking request']['Guest updated booking'] =
+        //               (linksData['Host accepted booking request']['Guest updated booking'] || { count: 0, sumTimeBetween: 0 });
+        //     currLink.count++;
 
-            currLink = linksData['Guest updated booking']['Successful booking'] =
-                      (linksData['Guest updated booking']['Successful booking'] || { count: 0, sumTimeBetween: 0 });
-            currLink.count++;
-        }
+        //     currLink = linksData['Guest updated booking']['Successful booking'] =
+        //               (linksData['Guest updated booking']['Successful booking'] || { count: 0, sumTimeBetween: 0 });
+        //     currLink.count++;
+        // }
     }
-    // console.log(interactions.length, "total interactions parsed")
+    console.log("total interactions", total);
     return {
         nodes: nodes,
         links: makeLinks(linksData)
@@ -268,14 +280,22 @@ function _parseInteractions(rawData) {
             if (firstInteraction !== null &&
                 firstReply !== null) {
                 var nearestHour = Math.round((firstReply - firstInteraction) / hourInMs) * hourInMs;
-                var nHours = nearestHour / 3600000;
+                var nHours = nearestHour / hourInMs;
 
                 return nHours + "-" + (nHours + 1) + " hrs";
+                // var nearestDay = Math.round((firstReply - firstInteraction) / dayInMs) * dayInMs;
+                // var nDays = nearestDay / dayInMs;
+
+                // return nDays + "-" + (nDays + 1) + " days";
+
             }
             else {
                 return "NA";
             }
         }),
+        // daysInAdvanceRequested: cf.dimension(function(d) {}),
+        // requestsPerUserPerDate: cf.
+
         // requests perlisting, percheckin,
         // didReply: cf.dimension(function(d) {}),
         // successfulRequest: cf.dimension(function(d) {

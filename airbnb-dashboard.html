@@ -12,8 +12,7 @@
         <script src="./js/libs/d3.geo.tile.js"></script>
         <script src="./js/libs/sankey.js"></script>
         <script src="./js/libs/dc.min.js"></script>
-        <!-- Latest compiled and minified CSS -->
-        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css" integrity="sha512-dTfge/zgoMYpP7QbHy4gWMEGsbsdZeCXz7irItjcC3sPUFtf0kuFbDz/ixG7ArTxmDjLXDmezHubeNikyKGVyQ==" crossorigin="anonymous">
+        <link rel="stylesheet" href="./css/bootstrap.min.css">
 
         <!-- Project files -->
         <script src="./js/map.js"></script>
@@ -30,31 +29,30 @@
     <body>
         <div id="airbnb-dashboard">
 
-            <div class="loading">Loading ...</div>
+            <div class="loading">
+                <img width="50" height="50" src="https://a2.muscache.com/airbnb/static/icons/android-icon-192x192-1fa51328bf372fc432334cb2fbda8dbc.png" />
+                Loading ...
+            </div>
+
             <div class="vis" style="display:none;">
                 <div class="hero">
-                    <div class="summary-container ib">
+
+                    <div id="timeline" class="">
                         <div class="vis-title">Tahoe marketplace</div>
                         <div class="date-summary"></div>
-                        <div class="listings-summary"></div>
-                        <div class="interactions-summary"></div>
-                    </div>
-
-                    <div id="timeline" class="ib">
                         <div class="zoom"></div>
                     </div>
+                    <div class="listings-summary"></div>
+                    <div class="interactions-summary"></div>
                 </div>
-                <!-- <div class="data-container"> -->
-                    <div class="supply">
-                        <div class="supply-header">
-                            New listings
-                        </div>
+                <div class="data-container">
 
-                        <div id="map-container" class="">
+                    <div class="supply off">
+                        <div id="map-container" class="ib">
                             <div class="chart-label">Location</div>
                         </div>
 
-                        <div class="dimensions">
+                        <div class="dimensions ib">
                             <div id="people-capacity" class="ib">
                                 <div class="chart-label">People capacity</div>
                             </div>
@@ -67,11 +65,7 @@
                         </div>
                     </div>
 
-                    <div class="demand">
-                        <div class="demand-header">
-                            Guest-host interactions
-                        </div>
-
+                    <div class="demand off">
                          <div id="path-analysis" class="">
                             <div class="chart-label">Interaction paths</div>
                         </div>
@@ -93,7 +87,7 @@
 
                         </div>
                     </div>
-                <!-- </div> -->
+                </div>
             </div>
         </div>
         <script>
