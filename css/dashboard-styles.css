@@ -160,7 +160,7 @@ svg {
 }
 .demand > div {
     width: 50%;
-    margin: 10px auto;
+    margin: 0 auto;
 }
 #path-analysis {
     width: 75%;
@@ -282,6 +282,25 @@ circle.data-hover {
     font-size: 10px;
     font-weight: 200;
     text-align: center;
+    pointer-events: none;
+}
+.node rect {
+    stroke: none;
+}
+.node.host rect {
+    fill: #0571b0;
+}
+.node.guest rect {
+    fill: #d01c8b;
+}
+.node.good rect {
+    fill: #333;
+    stroke: none;
+}
+.node.bad rect {
+    fill: #f4f4f4;
+    stroke: #333;
+    /*stroke-width: 1.5px;*/
 }
 
 /* timeline */

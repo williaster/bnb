@@ -175,13 +175,7 @@ function makeVis(parsedData) {
     //
     pathSankey = SankeyPath("#path-analysis")
         .width(800)
-        .height(220)
-        .fill(function(d) {
-            return d.className === "host"  ? listingsColor :
-                  (d.className === "guest" ? interactionsColor :
-                  (d.className === "good"  ? "#4dac26" :
-                  (d.className === "bad"   ? "#d01c8b" : "")));
-        });
+        .height(150)
 
     d3.select("#path-analysis")
         .datum(parsedData.paths)
@@ -340,7 +334,7 @@ function makeTimeline(parsedData) {
 
     function getListingsSummary(parsedData, extent, isEmpty) {
         if (isEmpty) {
-            return "<div><span class='emph'>-</span> new listings</div>";
+            return "<div>-- new listings</div>";
         }
         var monthInMs    = (1000*60*60*24*30);
         var offsetExtent = [new Date(extent[0] - monthInMs), new Date(extent[1] - monthInMs)];
@@ -373,7 +367,7 @@ function makeTimeline(parsedData) {
     };
     function getInteractionsSummary(parsedData, extent, isEmpty) {
         if (isEmpty) {
-            return "<div><span class='emph'>-</span> interactions</div>";
+            return "<div>-- interactions</div>";
         }
         var monthInMs    = (1000*60*60*24*30);
         var offsetExtent = [new Date(extent[0] - monthInMs), new Date(extent[1] - monthInMs)];

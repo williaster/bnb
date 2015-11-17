@@ -58,7 +58,7 @@ function _parseDataForPathAnalysis(interactions, instantlyBookableLookup, extent
                     source:  +nameToIdLookup[source],
                     target:  +nameToIdLookup[target],
                     value:   currLink[valueKey],
-                    percent: Math.round(currLink[valueKey] * nInteractions * 10) / 10
+                    percent: Math.round(currLink[valueKey] / nInteractions * 100 * 10) / 10
                 });
                 if (source === 'Guest contacted host') contacted+=currLink[valueKey];
                 if (source === 'Guest requested booking') requested+=currLink[valueKey];
@@ -80,7 +80,8 @@ function _parseDataForPathAnalysis(interactions, instantlyBookableLookup, extent
         5: 'Host rejected booking request',
         6: 'Guest updated booking',
         7: 'Successful booking',
-        8: 'Un-successful booking'
+        8: 'Un-successful booking',
+        9: 'Booked instantly'
     };
     var nameToIdLookup = {}; // invert the above above
     for (var id in idToNameLookup) { nameToIdLookup[ idToNameLookup[id] ] = id; }
@@ -94,7 +95,8 @@ function _parseDataForPathAnalysis(interactions, instantlyBookableLookup, extent
         { id: 5, name: idToNameLookup[5], className: 'host' },
         { id: 6, name: idToNameLookup[6], className: 'guest' },
         { id: 7, name: idToNameLookup[7], className: 'good' },
-        { id: 8, name: idToNameLookup[8], className: 'bad' }
+        { id: 8, name: idToNameLookup[8], className: 'bad' },
+        { id: 9, name: idToNameLookup[9], className: 'host' }
     ];
 
     var linksData = {};
@@ -141,8 +143,12 @@ function _parseDataForPathAnalysis(interactions, instantlyBookableLookup, extent
         guestRepliedAfterHostAccepted        = parsedHostAcceptedTime  && parsedBookingTime > parsedHostAcceptedTime;
 
         if (wasBookedInstantly) {
-            currLink = linksData['Guest requested booking']['Successful booking'] =
-                      (linksData['Guest requested booking']['Successful booking'] || { count: 0, sumTimeBetween: 0 });
+            currLink = linksData['Guest requested booking']['Booked instantly'] =
+                      (linksData['Guest requested booking']['Booked instantly'] || { count: 0, sumTimeBetween: 0 });
+            currLink.count++;
+
+            currLink = linksData['Booked instantly']['Successful booking'] =
+                      (linksData['Booked instantly']['Successful booking'] || { count: 0, sumTimeBetween: 0 });
             currLink.count++;
         }
 
@@ -231,8 +237,8 @@ function _parseListings(rawData) {
     var dims = listings.dims = {
         dateCreated:     cf.dimension(function(d) { return monthDayYear(d.date_created); }),
         location:        cf.dimension(function(d) { return [+d.approx_longitude, +d.approx_latitude]; }),
-        // bedrooms:        cf.dimension(function(d) { return +d.bedrooms; }),
-        // bathrooms:       cf.dimension(function(d) { return +d.bathrooms; }),
+        bedrooms:        cf.dimension(function(d) { return +d.bedrooms; }),
+        bathrooms:       cf.dimension(function(d) { return +d.bathrooms; }),
         capacity:        cf.dimension(function(d) { return +d.person_capacity; }),
         instantBookable: cf.dimension(function(d) { return +d.instant_bookable ? "Yes" : "No"; }),
         type:            cf.dimension(function(d) { return d.listing_type; })
@@ -243,7 +249,9 @@ function _parseListings(rawData) {
         location:    dims.location.group(), // @TODO get total value
         capacity:    dims.capacity.group(),
         type:        dims.type.group(),
-        instantBookable: dims.instantBookable.group()
+        instantBookable: dims.instantBookable.group(),
+        bedrooms:   dims.bedrooms.group(),
+        bathrooms:  dims.bathrooms.group(),
     };
 
     return listings;
@@ -287,13 +295,31 @@ function _parseInteractions(rawData) {
                 // var nDays = nearestDay / dayInMs;
 
                 // return nDays + "-" + (nDays + 1) + " days";
-
             }
             else {
                 return "NA";
             }
         }),
-        // daysInAdvanceRequested: cf.dimension(function(d) {}),
+        // daysInAdvanceRequested: cf.dimension(function(d) {
+        //     var firstInteraction = yearMonthDayHourMinuteSecond(d.first_interaction_time_utc);
+        //     var firstReply       = yearMonthDayHourMinuteSecond(d.first_reply_time_utc);
+
+        //     if (firstInteraction !== null &&
+        //         firstReply !== null) {
+        //         var nearestHour = Math.round((firstReply - firstInteraction) / hourInMs) * hourInMs;
+        //         var nHours = nearestHour / hourInMs;
+
+        //         return nHours + "-" + (nHours + 1) + " hrs";
+        //         // var nearestDay = Math.round((firstReply - firstInteraction) / dayInMs) * dayInMs;
+        //         // var nDays = nearestDay / dayInMs;
+
+        //         // return nDays + "-" + (nDays + 1) + " days";
+
+        //     }
+        //     else {
+        //         return "NA";
+        //     }
+        // }),
         // requestsPerUserPerDate: cf.
 
         // requests perlisting, percheckin,

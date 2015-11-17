@@ -289,8 +289,8 @@ d3.sankey = function() {
     // return node.y + node.dy / 2;
     // This aligns nodes along the top of their levels
     // return node.y + node.dy;
-    return node.y;
-    // return 0;
+    // return node.y;
+    return 0;
   }
 
   function value(link) {

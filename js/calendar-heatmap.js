@@ -120,13 +120,17 @@ var CalendarHeatmap = function(containerId) {
                     .style("stroke", "#333");
 
                 tooltip
+                    .html("<div class='emph'>" +tooltipFormat(d.date) + "</div>value: " + dataByDate[d.string])
+                  .transition()
+                    .duration(200)
                     .style("opacity", 1)
                     .style("left", (d3.event.pageX - 30) + "px")
-                    .style("top", (d3.event.pageY - 4*cellSize) + "px")
-                    .html(tooltipFormat(d.date) + "<br/>value: " + dataByDate[d.string]);
+                    .style("top", (d3.event.pageY - 4.5*cellSize) + "px");
             })
             .on("mouseout", function(d) {
-                tooltip.style("opacity", 0);
+                tooltip.transition()
+                    .duration(100)
+                    .style("opacity", 0);
 
                 d3.select(this)
                     .attr("stroke-width", "1px")

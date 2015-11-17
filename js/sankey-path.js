@@ -3,7 +3,8 @@ function SankeyPath(containerId) {
     var width  = 500 - margin.left - margin.right;
     var height = 300 - margin.top  - margin.bottom;
 
-    var fillAccessor = function(d) { return d.color || "000"};
+    var commaFormat  = d3.format(",");
+    var fillAccessor; // = function(d) { return d.color || "000"};
     var svg, sankey, path, linksG, nodesG, nodeRects, nodeText, tooltip;
 
     var chart = function(selection) {
@@ -48,7 +49,9 @@ function SankeyPath(containerId) {
         links.exit().remove();
 
         links.enter().append("path")
-            .attr("class", "link");
+            .attr("class", "link")
+            .on("mouseover", onmouseover)
+            .on("mouseout",  onmouseout);
 
         links.attr("d", path)
           .transition().duration(200)
@@ -63,15 +66,13 @@ function SankeyPath(containerId) {
 
         nodes.exit().remove();
 
-        var temp = nodes.enter().append("g")
-            .attr("class", function(d) { return "node " + (d.className || ""); });
+        var temp = nodes.enter().append("g");
 
         temp.append("rect")
             .attr("width", sankey.nodeWidth())
-            .style("stroke", "none")
+            // .style("stroke", "none")
             .on("mouseover", onmouseover)
-            .on("mouseout",  onmouseout)
-            .on("mouseup", onmouseover);
+            .on("mouseout",  onmouseout);
 
         temp.append("text")
             .attr("x", -6)
@@ -82,18 +83,19 @@ function SankeyPath(containerId) {
             .attr("text-anchor", "start");
 
         nodes
+            .attr("class", function(d) { return "node " + (d.className || ""); })
             .transition().duration(200)
             .attr("transform", function(d) {
                 return "translate(" + d.x + "," + d.y + ")";
             });
 
         nodes.select("rect")
-            .style("fill", fillAccessor)
+            // .style("fill", fillAccessor)
             .transition().duration(200)
             .attr("height", function(d) { return d.dy; });
 
         nodes.select("text")
-            .attr("class", "name")
+            // .attr("class", "name")
             .attr("y", function(d) { return d.dy / 2; })
             .text(function(d) {
                 return d.value ? d.name : ""
@@ -133,7 +135,7 @@ function SankeyPath(containerId) {
         };
         function onmouseover(d) {
             tooltip
-                .html(getTooltipHtml)
+                .html(function() { return getTooltipHtml(d); })
               .transition()
                 .delay(300)
                 .duration(200)
@@ -148,11 +150,26 @@ function SankeyPath(containerId) {
                 .style("opacity", 0);
         };
         function getTooltipHtml(d) {
-            var name = d.name;
-            var n    = d.value + " (" + d.percentage + ")";
+            var html = "";
+            if (d.sourceLinks) { // is node
+                return "Count: <span class='emph'>" + commaFormat(d.value); + "</span>";
+            }
+            else {
+                var sumLinks = function(links) {
+                    return d3.sum(links.map(function(l) { return l.value; }));
+                }
+                var val     = commaFormat(d.value);
+                var sourcePercent = d3.round((d.value / d.source.value) * 100, 1);
+                var targetPercent = d3.round((d.value / d.target.value) * 100, 1);
+            // var n    = d.value + " (" + d.percent + "%)";
 
-            return "<div class='name'>" + name + "</div>" +
-                   "<div class='value'>" + n + "</div>";
+            // return val + " " + sourcePercent + " " + targetPercent;
+            return "<div class=''>Count: <span class='emph'>" + val + "</span></div>" +
+                   "<div class='percents'>" +
+                        "<span class='emph'>" + (isFinite(sourcePercent) ? sourcePercent : "100") + "%</span> of source<br/>" +
+                        "<span class='emph'>" + (isFinite(targetPercent) ? targetPercent : "--") + "%</span> of target" +
+                   "</div>";
+            }
         };
     }
 

@@ -12,7 +12,7 @@ var MapChart = function(containerId) {
     var locationAccessor = function(d) { return d.value; }
     var userAddedLabels  = [];
     var constantRadius   = false;
-    var showLegend       = true;
+    var showLegend       = false;
     var mapScale         = 160000;
     var mapCenter        = [-120.12, 39.08]; // tahoe
 
@@ -120,7 +120,7 @@ var MapChart = function(containerId) {
         var _legend = d3.legend.size()
             .scale(radiusScale)
             .shape('circle')
-            .shapePadding(20)
+            .shapePadding(10)
             .labelOffset(15)
             .orient('horizontal');
 
