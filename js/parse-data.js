@@ -1,7 +1,5 @@
 // requires d3 + crossfilter libs
 
-// @TODO? number of tries per guest (per checkin date)????
-
 // For parsing dates with diff formats
 var monthDayYear = d3.time.format("%m/%d/%y").parse;
 var yearMonthDay = d3.time.format("%Y-%m-%d").parse;
@@ -9,18 +7,30 @@ var yearMonthDayHourMinuteSecond = d3.time.format("%Y-%m-%d %H:%M:%S.%L").parse;
 var hourInMs = 1000 * 60 * 60;
 var halfDayInMs  = hourInMs * 12;
 var dayInMs  = hourInMs * 24;
+var timeFilter = [new Date("1/1/2013"), new Date("1/1/2015")];
 
 function mungeData(listingsData, interactionsData) {
+    listingsData = listingsData.filter(function(d) {
+        var time =  monthDayYear(d.date_created);
+        return time <= timeFilter[1] && time >= timeFilter[0];
+    });
+    interactionsData = interactionsData.filter(function(d) {
+        if (!d.first_interaction_time_utc) return false;
+
+        var time =  yearMonthDayHourMinuteSecond(d.first_interaction_time_utc);
+        return time <= timeFilter[1] && time >= timeFilter[0];
+    });
+
     var listings     = _parseListings(listingsData);
     var interactions = _parseInteractions(interactionsData);
 
     var instantlyBookable   = _getInstantlyBookableListingsLookup(listingsData);
     var dataForPathAnalysis = _parseDataForPathAnalysis(interactionsData, instantlyBookable);
-    var filterPathAnalysisByDateRange = function(extent) {
+    var filterPathAnalysisByDateRange = function(data, extent) {
         return _parseDataForPathAnalysis(interactionsData, instantlyBookable, extent);
     };
 
-    return {
+    return $d = {
         listingsRaw:     listingsData,
         interactionsRaw: interactionsData,
         listings: listings,
@@ -240,7 +250,7 @@ function _parseListings(rawData) {
         dateCreated:     cf.dimension(function(d) { return monthDayYear(d.date_created); }),
         location:        cf.dimension(function(d) { return [+d.approx_longitude, +d.approx_latitude]; }),
         bedrooms:        cf.dimension(function(d) { return +d.bedrooms; }),
-        bathrooms:       cf.dimension(function(d) { return +d.bathrooms; }),
+        // bathrooms:       cf.dimension(function(d) { return +d.bathrooms; }),
         capacity:        cf.dimension(function(d) { return +d.person_capacity; }),
         instantBookable: cf.dimension(function(d) { return +d.instant_bookable ? "Yes" : "No"; }),
         type:            cf.dimension(function(d) { return d.listing_type; })
@@ -248,13 +258,24 @@ function _parseListings(rawData) {
 
     var groups = listings.groups = {
         dateCreated: dims.dateCreated.group(),
-        location:    dims.location.group(), // @TODO get total value
+        location:    dims.location.group(), //.reduce(reduceAddTotal, reduceRemoveTotal, reduceInitTotal),
         capacity:    dims.capacity.group(),
         type:        dims.type.group(),
         instantBookable: dims.instantBookable.group(),
         bedrooms:   dims.bedrooms.group(),
-        bathrooms:  dims.bathrooms.group(),
+        // bathrooms:  dims.bathrooms.group(),
     };
+
+    groups.locationTotals = {};
+    groups.location.top(Infinity).forEach(function(d) {
+        groups.locationTotals[ d.key ] = groups.locationTotals[ d.key ] || 0;
+        groups.locationTotals[ d.key ] += d.value;
+    });
+
+    // groups.locationMovingAverage = crossfilter$ma.accumulateGroupForNDayMovingAverage(
+    //     groups.location,
+    //     10
+    // );
 
     return listings;
 }
@@ -292,14 +313,10 @@ function _parseInteractions(rawData) {
                 var nearestHour = Math.round((firstReply - firstInteraction) / hourInMs) * hourInMs;
                 var nHours = nearestHour / hourInMs;
 
-                return nHours + "-" + (nHours + 1) + " hrs";
-                // var nearestDay = Math.round((firstReply - firstInteraction) / dayInMs) * dayInMs;
-                // var nDays = nearestDay / dayInMs;
-
-                // return nDays + "-" + (nDays + 1) + " days";
+                return nHours;
             }
             else {
-                return "NA";
+                return -1;
             }
         }),
         daysInAdvanceRequested: cf.dimension(function(d) {
@@ -315,20 +332,13 @@ function _parseInteractions(rawData) {
                 return nDays;
             }
             else {
-                return 0;
+                return -1;
             }
         }),
         // requestsPerUserPerDate: cf.
 
         // requests perlisting, percheckin,
-        // didReply: cf.dimension(function(d) {}),
-        // successfulRequest: cf.dimension(function(d) {
 
-        // })
-        // success: cf.dimension(function(d) {
-        //     return
-        // })
-        // replied:   cf.dimension(function(d) { return d. } )
     };
 
     var groups = interactions.groups = {
@@ -341,24 +351,21 @@ function _parseInteractions(rawData) {
         // success: dims.success.group().reduce(reduceAddAvg, reduceRemoveAvg, reduceInitAvg, "")
     };
 
+
+
     return interactions;
 }
 
 
-function reduceAddAvg(p,v,attr) {
-  ++p.count
-  p.sum += +v[attr];
-  p.avg = p.sum / p.count;
+function reduceAddTotal(p,v,attr) {
+  ++p.count;
+  ++p.total;
   return p;
 }
-function reduceRemoveAvg(p,v,attr) {
-  --p.count
-  p.sum -= +v[attr];
-  p.avg = p.sum / p.count;
+function reduceRemoveTotal(p,v,attr) {
+  --p.count;
   return p;
 }
-function reduceInitAvg() {
-  return { count: 0, sum: 0, avg: 0 };
+function reduceInitTotal() {
+  return { count: 0, total: 0 };
 }
-// var statesAvgGroup = statesAvgDimension.group().reduce(reduceAddAvg, reduceRemoveAvg, reduceInitAvg, 'savings');
-// var statesAvgGroup = statesAvgDimension.group().reduce(reduceAddAvg, reduceRemoveAvg, reduceInitAvg, 'cost');

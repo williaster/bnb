@@ -5,13 +5,12 @@ var heightSupplyCharts = 150;
 var heightDemandCharts = 130;
 var commaFormat = d3.format(",");
 
-var overrideTimeDomain = [new Date("1/1/2013"), new Date("1/1/2015")];
 var initialTimerange   = [new Date("12/1/2014"), new Date("1/1/2015")];
 var supplyToggle, demandToggle,
     // demand
     map, byCapacity, byType, byInstant, byBedBath,
     // supply
-    calendar, byNights, byGuests, timeToReply, timeToCheckin, pathSankey;
+    calendar, byNights, byGuests, timeToReply, timeToCheckin, sankeyPath;
 
 function initVis() {
     // Fetch data
@@ -28,27 +27,10 @@ function initVis() {
         });
     });
 }
-function handleSupplyDemandToggle(clicked) {
-    var toToggle, toToggleButton, toTurnOff, toTurnOffButton;
-    if (clicked === "supply") {
-        toToggleButton  = d3.select(".listings-summary");
-        toTurnOffButton = d3.select(".interactions-summary");
-        toToggle  = d3.select(".supply");
-        toTurnOff = d3.select(".demand");
-    } else {
-        toTurnOffButton  = d3.select(".listings-summary");
-        toToggleButton   = d3.select(".interactions-summary")
-        toTurnOff  = d3.select(".supply");
-        toToggle = d3.select(".demand");
-    }
-    toToggleButton.classed("on", !toToggleButton.classed("on"));
-    toToggle.classed("off", !toToggle.classed("off"));
 
-    toTurnOffButton.classed("on", false);
-    toTurnOff.classed("off", true);
-};
 // renders all charts
 // @TODO just make list of charts to iteratea over + define update function (so can remove global vars using closure)
+// @TODO instead of on "filtered" should register charts with dc.js
 function makeVis(parsedData) {
     var listings     = parsedData.listings;
     var interactions = parsedData.interactions;
@@ -73,7 +55,7 @@ function makeVis(parsedData) {
         .centerBar(true)
         .round(function(v) { return dc.round.floor(v) + 0.5; })
         .alwaysUseRounding(true)
-
+        .on("filtered", function() { redrawDemand(parsedData); })
         .yAxisLabel('# New listings')
 
     byCapacity.yAxis().ticks(5)
@@ -165,18 +147,28 @@ function makeVis(parsedData) {
     byGuests.xAxis().ticks(5);
     byGuests.yAxis().ticks(4);
 
-    timeToReply = dc.rowChart("#time-to-reply")
-        .width(200)
+    timeToReply = dc.barChart("#time-to-reply")
+        .width(175)
         .height(heightDemandCharts - 30)
-        .margins({top: 10, right: 10, bottom: 20, left: 10})
+        .margins({top: 10, right: 10, bottom: 20, left: 40})
         .dimension(interactions.dims.timeToReply)
         .group(interactions.groups.timeToReply)
-        .elasticX(true)
-        .data(function(group) { return group.top(5); })
+        .x( d3.scale
+              .linear()
+              .domain([-1, 30]) )
+        .elasticY(true)
+        .gap(1)
+        .centerBar(true)
+        .round(function(v) { return dc.round.floor(v) + 0.5; })
+        .alwaysUseRounding(true)
+        .yAxisLabel('# Interactions')
         .on("filtered", function() { redrawSupply(parsedData); })
-        .xAxis().ticks(5)
 
-    timeToCheckin = dc.barChart("#time-to-checkin")
+    timeToReply.xAxis().ticks(5);
+    timeToReply.yAxis().ticks(4);
+
+    timeToCheckin = dc.barChart("#time-to-checkin");
+
     timeToCheckin.width(250)
         .height(heightDemandCharts - 30)
         .margins({top: 10, right: 10, bottom: 20, left: 40})
@@ -184,15 +176,15 @@ function makeVis(parsedData) {
         .group(interactions.groups.daysInAdvanceRequested)
         .x( d3.scale
               .linear()
-              .domain([-1, 35]) )
-        .elasticY(true)
+              .domain([-1, 100]) )
         // .elasticX(true)
+        .elasticY(true)
         .gap(1)
         .centerBar(true)
         .round(function(v) { return dc.round.floor(v) + 0.5; })
         .alwaysUseRounding(true)
         .yAxisLabel('# Interactions')
-        .on("filtered", function() { redrawSupply(parsedData, false, true); });
+        .on("filtered", function() { redrawSupply(parsedData, false, false); });
 
     timeToCheckin.xAxis().ticks(5);
     timeToCheckin.yAxis().ticks(4);
@@ -205,20 +197,24 @@ function makeVis(parsedData) {
         .height(330)
         .key(function(d) { return d.key; })
         .location(function(d) { return d.key; })
-        .radius(function(d) { return +d.value; });
+        .radius(function(d) { return d.value; })
+        .color(function(d) {
+            var total = listings.groups.locationTotals[d.key];
+            return d3.round(d.value / total * 100, 1);
+        });
 
     d3.select("#map-container")
         .datum(listings.groups.location.top(Infinity))
         .call(map);
 
     // Path analysis
-    pathSankey = SankeyPath("#path-analysis")
+    sankeyPath = SankeyPath("#path-analysis")
         .width(800)
         .height(150)
 
     d3.select("#path-analysis")
         .datum(parsedData.paths)
-        .call(pathSankey);
+        .call(sankeyPath);
 
     // timeline updates data, call last
     makeTimeline(parsedData);
@@ -266,7 +262,7 @@ function makeTimeline(parsedData) {
     timeline.svg.select(".brush")
         .call(timeline.brush());
 
-    onBrush(); // emit an event
+    onBrush(); // emit an event to init
 
     function onBrush(brush, brushG) {
         brush = brush || timeline.brush();
@@ -291,8 +287,8 @@ function makeTimeline(parsedData) {
         interactionsSummary.html(getInteractionsSummary(parsedData, extent, brush.empty()));
 
         // path analysis
-        pathSankey.update(
-            parsedData.filterPathAnalysisByDateRange(brush.extent())
+        sankeyPath.update(
+            parsedData.filterPathAnalysisByDateRange(undefined, brush.extent())
         );
 
         redrawAll(parsedData);
@@ -317,9 +313,7 @@ function makeTimeline(parsedData) {
             name: "new listings",
             color: listingsColor,
             axis: 0,
-            values: listingsGroup.filter(function(d) {
-                return d.key >= overrideTimeDomain[0] && d.key <= overrideTimeDomain[1];
-            })
+            values: listingsGroup
         };
 
         var interactionsGroup = interactions.groups.firstInteraction
@@ -330,9 +324,7 @@ function makeTimeline(parsedData) {
             name: "interactions",
             color: interactionsColor,
             axis: 1,
-            values: interactionsGroup.filter(function(d) {
-                return d.key >= overrideTimeDomain[0] && d.key <= overrideTimeDomain[1];
-            })
+            values: interactionsGroup
         };
 
         var data = [listingsData, interactionsData];
@@ -404,6 +396,7 @@ function makeTimeline(parsedData) {
                     arrow + "<span class='emph'>" + Math.abs(percentChange) + "%</span> from " + commaFormat(countOffset) +
                "</div>";
     };
+
     function getInteractionsSummary(parsedData, extent, isEmpty) {
         if (isEmpty) {
             return "<div>-- interactions</div>";
@@ -439,6 +432,30 @@ function makeTimeline(parsedData) {
     };
 
 };
+// Toggles the supply/demand panes of the vis
+function handleSupplyDemandToggle(clicked) {
+    var paneToToggle, toToggleButton, toTurnOff, toTurnOffButton, hero;
+    if (clicked === "supply") {
+        toToggleButton  = d3.select(".listings-summary");
+        toTurnOffButton = d3.select(".interactions-summary");
+        paneToToggle  = d3.select(".supply");
+        toTurnOff = d3.select(".demand");
+    } else {
+        toTurnOffButton  = d3.select(".listings-summary");
+        toToggleButton   = d3.select(".interactions-summary");
+        toTurnOff  = d3.select(".supply");
+        paneToToggle = d3.select(".demand");
+    }
+
+    toToggleButton.classed("on", !toToggleButton.classed("on"));
+    paneToToggle.classed("off", !paneToToggle.classed("off"));
+
+    hero = d3.select(".hero")
+        .classed("on", toToggleButton.classed("on") ? true : false);
+
+    toTurnOffButton.classed("on", false);
+    toTurnOff.classed("off", true);
+};
 
 function redrawAll(parsedData) {
     redrawDemand(parsedData, false);
@@ -455,22 +472,29 @@ function redrawDemand(parsedData, updateDc) {
     }
 };
 
-
-function redrawSupply(parsedData, updateDc, doNotUpdateCheckin) {
+function redrawSupply(parsedData, updateDc) {
     // Have to manually update the x axis ...
-    function getMaxTimeToCheckin() {
-        var top = parsedData.interactions.dims.daysInAdvanceRequested.top(3)[2]; // outliers
-        var firstInteraction = d3.time.day(parsedData.yearMonthDayHourMinuteSecond(top.first_interaction_time_utc));
-        var checkinDate      = parsedData.yearMonthDay(top.checkin_date);
-        return (checkinDate - firstInteraction) / (1000*60*60*24);
-    };
-    if (!doNotUpdateCheckin) {
-        timeToCheckin
-            .x(d3.scale.linear()
-            .domain([-1, getMaxTimeToCheckin() + 1]));
-    }
+    // function getMaxTimeToCheckin() {
+    //     var top = parsedData.interactions.dims.daysInAdvanceRequested.top(1)[0]; // outliers
+    //     var firstInteraction = d3.time.day(parsedData.yearMonthDayHourMinuteSecond(top.first_interaction_time_utc));
+    //     var checkinDate      = parsedData.yearMonthDay(top.checkin_date);
+    //     return Math.round( (checkinDate - firstInteraction) / (1000*60*60*24) );
+    // };
+    // if (!doNotUpdateCheckin) {
+    //     var maxTimeToCheckin = getMaxTimeToCheckin();
+    //     console.log("max time", maxTimeToCheckin)
+    //     timeToCheckin
+    //         .x(d3.scale.linear()
+    //             .domain([-1, maxTimeToCheckin])
+    //         );
+    //     timeToCheckin.redraw();
+    // }
 
-    timeToCheckin.redraw();
+    // This is too slow
+    // var newSankeyData = parsedData.filterPathAnalysisByDateRange(
+    //     parsedData.interactions.dims.checkinDate.top(Infinity) // intersects all filters
+    // );
+    // sankeyPath.update(newSankeyData);
     calendar.redraw();
 
     if (updateDc) {

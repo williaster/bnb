@@ -1,4 +1,5 @@
 body {
+    /*font-family: Montserrat,Avenir Next,Arial,Helvetica,sans-serif;*/
     font-family: "Helvetica Neue", Helvetica, sans-serif;
     shape-rendering: crispEdges;
 }
@@ -119,10 +120,19 @@ svg {
     fill: #d01c8b;
 }
 
-.hero,
 .data-container {
     width: 1300px;
     margin: 0 10px;
+}
+.hero {
+    transition: margin 0.5s ease;
+    width: 1300px;
+    margin: 175px 10px;
+}
+.hero.on {
+    transition: margin 0.5s ease;
+    margin-top: 0;
+    margin-bottom: 0;
 }
 
 .supply,
@@ -130,11 +140,12 @@ svg {
     background: #f4f4f4;
     margin: 0 auto;
     width: 1300px;
-    height: 510px;
+    height: 585px;
 }
 .supply.off,
 .demand.off {
     display: none;
+    /*visibility: hidden;*/
 }
 .chart-label {
     font-size: 20px;
@@ -168,9 +179,12 @@ svg {
     width: 50%;
     margin: 0 auto;
 }
-#path-analysis,
+
 .demand .dimensions {
     width: 75%;
+}
+#path-analysis {
+    width: 85%;
 }
 
 /* map */
@@ -199,14 +213,21 @@ circle.data-hover {
     stroke: #fff;
     stroke-width: 2px;
 }
-
+.legendTitle {
+    text-align: middle;
+}
 /* dc.js charts */
+.dc-chart {
+    margin: 0 7px;
+}
 .row rect {
     cursor: pointer;
 }
 .row text {
+    text-rendering: optimizeLegibility;
     pointer-events: none;
-    text-shadow: 0 2px 0 #fff;
+    fill: #fff;
+    text-shadow: 1px 2px 1px #000;
     font-size: 13px;
 }
 

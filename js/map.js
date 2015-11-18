@@ -1,4 +1,3 @@
-// @TODO tooltip
 var MapChart = function(containerId) {
     // Lots of private variables
     var width  = 400;
@@ -12,14 +11,14 @@ var MapChart = function(containerId) {
     var locationAccessor = function(d) { return d.value; }
     var userAddedLabels  = [];
     var constantRadius   = false;
-    var showLegend       = false;
+    var showLegend       = true;
     var mapScale         = 160000;
     var mapCenter        = [-120.12, 39.08]; // tahoe
 
     // Color related
     var defaultCircleColor = "#0571b0"; //"#4dac26"; //"#d01c8b";
     var colorScale = d3.scale.linear()
-        .range(["#d01c8b","#4dac26"]);
+        .range(["#0571b0","#ca0020"]);
 
     // Size related
     var defaultRadius = 4;
@@ -87,7 +86,10 @@ var MapChart = function(containerId) {
         // var color = colorScale(d.CR);
         var long = -d.key[0];
         var lat  = +d.key[1];
-        var html = "<span class='emph'>" + d.value + "</span> new listings<br/>" +
+        var html = "<span class='emph'>" + radiusAccessor(d) + "</span> new listings<br/>" +
+                   "<span class='emph' style='color:" + colorScale(colorAccessor(d)) + ";'>" +
+                        d3.round(colorAccessor(d), 1) +
+                   "</span>% of total in area<br/>" +
                    "<span class='emph'>" + lat + "&deg; </span>N <span class='emph'>" + long + "&deg; </span>W";
 
         tooltip.html(html)
@@ -110,34 +112,33 @@ var MapChart = function(containerId) {
 
 
     function getLegend(svg, scale) {
-        // d3.select(containerId).append("div").append("svg")
-            // .attr("height", "100px")
-            // .attr("width", width + "px")
-        legend = svg.append("g")
-            .attr("class", "legend")
-            .attr("transform", "translate(" + (width/3) + "," +  15 + ")");
 
-        var _legend = d3.legend.size()
-            .scale(radiusScale)
-            .shape('circle')
-            .shapePadding(10)
+        var _legend = d3.legend.color()
+            .shapeWidth(30)
+            .shapePadding(30)
+            .orient('horizontal')
             .labelOffset(15)
-            .orient('horizontal');
+            .labelAlign("middle")
+            .title("Fraction of total in area")
+            .scale(colorScale);
 
-        legend.update = function() {
-            svg.select("g.legend")
-              .call(_legend);
+         legend = d3.select(containerId)
+           .append("div")
+           .append("svg")
+            .attr("height", "100px")
+            .attr("width", width + "px")
+          .append("g")
+            .attr("class", "legend")
+            .attr("transform", "translate(" + (width/3) + "," +  15 + ")")
+          .call(_legend);
 
-            return legend;
-        };
-
-        return legend.update();
+        return legend;
     }
 
     map.updateChart = function(nextData) {
         // update domains if accessors passed
         if (colorAccessor)  {
-            colorScale.domain(d3.extent(nextData, colorAccessor));
+            colorScale.domain([0,100]); //d3.extent(nextData, colorAccessor));
         }
 
         if (radiusAccessor) {
@@ -145,11 +146,10 @@ var MapChart = function(containerId) {
                 0,
                 Math.max(2, d3.max(nextData, radiusAccessor))
             ]);
-
-            if (showLegend) {
-                legend.update();
-            }
         }
+        // if (showLegend) {
+        //     legend.update();
+        // }
 
         var dataCircles = dataG.selectAll("circle.data")
             .data(nextData, dataKeyAccessor);
@@ -258,6 +258,11 @@ var MapChart = function(containerId) {
     map.radius = function(_) {
         if (typeof _ === "undefined") return radiusAccessor;
         radiusAccessor = _;
+        return map;
+    };
+    map.color = function(_) {
+        if (typeof _ === "undefined") return colorAccessor;
+        colorAccessor = _;
         return map;
     };
 
